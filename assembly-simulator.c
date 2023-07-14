@@ -1,5 +1,5 @@
-// gcc -Wall -O3 davibittencourt_202300061554_poxim.c -o davibittencourt_202300061554_poxim
-// ./davibittencourt_202300061554_poxim 1_exemplo.hex 1_davi.out
+// gcc -Wall -O3 assembly-simulator.c -o assembly-simulator
+// ./assembly-simulator entrada saída
 #include <stdint.h>
 #include <stdlib.h>
 #include <stdio.h>
@@ -1260,8 +1260,6 @@ int main (int argc, char* argv[]) {
     // Próxima instrução => PC = PC + 4;
     R[29] += 1;
   }
-
-
   fprintf(output, "[END OF SIMULATION]\n");
 
   fclose(input);
