@@ -158,7 +158,7 @@ int main (int argc, char* argv[]) {
     uint8_t z = 0, x = 0, y = 0, l = 0, v = 0, w = 0;
     char zName[5], xName[5], yName[5], lName[5], vName[5], wName[5];
     char vHex[11], wHex[11], xHex[11], yHex[11], zHex[11];
-    uint32_t i = 0, xxyl;
+    int32_t i = 0, xxyl;
     uint64_t rzry;
     uint32_t pcAntigo = 0, spAntigo = 0, xyl;
 
@@ -194,7 +194,6 @@ int main (int argc, char* argv[]) {
         if ((xxyl & 0x00100000) >> 20 == 0b1)
           xxyl += 0xFFE00000;
 
-        R[z] = (int32_t) R[z];
         R[z] = xxyl;
 
         formatR(zName, z);
@@ -501,7 +500,7 @@ int main (int argc, char* argv[]) {
         // CY <- CMP bit 32 = 1
         updateCY(&R[31], ((cmp >> 32) & 0b1) == 0b1);
 
-        formatR(zName, z);
+        formatR(yName, y);
         formatR(xName, x);
 
         sprintf(instrucao, "cmp %s,%s", xName, yName);
@@ -633,7 +632,7 @@ int main (int argc, char* argv[]) {
         if ((i >> 15) == 0b1)
           i += 0xFFFF0000;
 
-        resultado = (uint64_t)R[x] - (uint64_t)i;
+        resultado = (uint64_t)R[x] - (int64_t)i;
         R[z] = R[x] - i;
 
         // ZN <- R[z] = 0
@@ -662,7 +661,7 @@ int main (int argc, char* argv[]) {
         if ((i >> 15) == 0b1)
           i += 0xFFFF0000;
 
-        resultado = (uint64_t)R[x] * (uint64_t)i;
+        resultado = (uint64_t)R[x] * (int64_t)i;
         R[z] = R[x] * i;
 
         // ZN <- R[z] = 0
@@ -844,7 +843,7 @@ int main (int argc, char* argv[]) {
       case 0b101010:
         // bae - condição AT(above or equal sem sinal) -> CY = 0
         pcAntigo = R[29];
-        // i(26 bits menos significativos) = R[28] & 0x03FFFFFF;
+        // i(26 bits menos significativos)
         i = R[28] & 0x03FFFFFF;
         // extensão de sinal caso i seja negativo
         if ((i >> 25) == 1)
@@ -858,7 +857,7 @@ int main (int argc, char* argv[]) {
       case 0b101011:
         // bat - condição AT(above than sem sinal) -> ZN = 0 && CY = 0
         pcAntigo = R[29];
-        // i(26 bits menos significativos) = R[28] & 0x03FFFFFF;
+        // i(26 bits menos significativos)
         i = R[28] & 0x03FFFFFF;
         // extensão de sinal caso i seja negativo
         if ((i >> 25) == 1)
@@ -872,7 +871,7 @@ int main (int argc, char* argv[]) {
       case 0b101100:
         // bbe - condição BE(below or equal sem sinal) -> ZN = 1 or CY = 1
         pcAntigo = R[29];
-        // i(26 bits menos significativos) = R[28] & 0x03FFFFFF;
+        // i(26 bits menos significativos)
         i = R[28] & 0x03FFFFFF;
         // extensão de sinal caso i seja negativo
         if ((i >> 25) == 1)
@@ -886,7 +885,7 @@ int main (int argc, char* argv[]) {
       case 0b101101:
         // bbt - condição BT(below than sem sinal) -> CY = 1
         pcAntigo = R[29];
-        // i(26 bits menos significativos) = R[28] & 0x03FFFFFF;
+        // i(26 bits menos significativos)
         i = R[28] & 0x03FFFFFF;
         // extensão de sinal caso i seja negativo
         if ((i >> 25) == 1)
@@ -900,11 +899,12 @@ int main (int argc, char* argv[]) {
       case 0b101110:
         // beq - condição EQ(equal) -> ZN = 1
         pcAntigo = R[29];
-        // i(26 bits menos significativos) = R[28] & 0x03FFFFFF;
+        // i(26 bits menos significativos)
         i = R[28] & 0x03FFFFFF;
         // extensão de sinal caso i seja negativo
         if ((i >> 25) == 1)
           i += 0xFC000000;
+
         if ((R[31] & 0x00000040) != 0) R[29] = R[29] + i;
         
         sprintf(instrucao, "beq %i", i);
@@ -913,7 +913,7 @@ int main (int argc, char* argv[]) {
       case 0b101111:
         // bge - condição GE(greater or equal com sinal) -> SN = OV
         pcAntigo = R[29];
-        // i(26 bits menos significativos) = R[28] & 0x03FFFFFF;
+        // i(26 bits menos significativos)
         i = R[28] & 0x03FFFFFF;
         // extensão de sinal caso i seja negativo
         if ((i >> 25) == 1)
@@ -927,7 +927,7 @@ int main (int argc, char* argv[]) {
       case 0b110000:
         // bgt - condição GT(greater than com sinal) -> ZN = 0 && SN = OV
         pcAntigo = R[29];
-        // i(26 bits menos significativos) = R[28] & 0x03FFFFFF;
+        // i(26 bits menos significativos)
         i = R[28] & 0x03FFFFFF;
         // extensão de sinal caso i seja negativo
         if ((i >> 25) == 1)
@@ -941,7 +941,7 @@ int main (int argc, char* argv[]) {
       case 0b110001:
         // biv - condição IV(invalid) -> IV = 1
         pcAntigo = R[29];
-        // i(26 bits menos significativos) = R[28] & 0x03FFFFFF;
+        // i(26 bits menos significativos)
         i = R[28] & 0x03FFFFFF;
         // extensão de sinal caso i seja negativo
         if ((i >> 25) == 1)
@@ -955,7 +955,7 @@ int main (int argc, char* argv[]) {
       case 0b110010:
         // ble - condição LE(less or equal com sinal) -> ZN = 1 or SN != OV
         pcAntigo = R[29];
-        // i(26 bits menos significativos) = R[28] & 0x03FFFFFF;
+        // i(26 bits menos significativos)
         i = R[28] & 0x03FFFFFF;
         // extensão de sinal caso i seja negativo
         if ((i >> 25) == 1)
@@ -969,7 +969,7 @@ int main (int argc, char* argv[]) {
       case 0b110011:
         // blt - condição LT(less than com sinal) -> SN != OV
         pcAntigo = R[29];
-        // i(26 bits menos significativos) = R[28] & 0x03FFFFFF;
+        // i(26 bits menos significativos)
         i = R[28] & 0x03FFFFFF;
         // extensão de sinal caso i seja negativo
         if ((i >> 25) == 1)
@@ -983,7 +983,7 @@ int main (int argc, char* argv[]) {
       case 0b110100:
         // bne - condição NE(not equal) -> ZN = 0
         pcAntigo = R[29];
-        // i(26 bits menos significativos) = R[28] & 0x03FFFFFF;
+        // i(26 bits menos significativos)
         i = R[28] & 0x03FFFFFF;
         // extensão de sinal caso i seja negativo
         if ((i >> 25) == 1)
@@ -997,7 +997,7 @@ int main (int argc, char* argv[]) {
       case 0b110101:
         // bni - condição NI(not invalid) -> IV = 0
         pcAntigo = R[29];
-        // i(26 bits menos significativos) = R[28] & 0x03FFFFFF;
+        // i(26 bits menos significativos)
         i = R[28] & 0x03FFFFFF;
         // extensão de sinal caso i seja negativo
         if ((i >> 25) == 1)
@@ -1011,7 +1011,7 @@ int main (int argc, char* argv[]) {
       case 0b110110:
         // bnz - condição NZ(not zero division) -> ZD = 0
         pcAntigo = R[29];
-        // i(26 bits menos significativos) = R[28] & 0x03FFFFFF;
+        // i(26 bits menos significativos)
         i = R[28] & 0x03FFFFFF;
         // extensão de sinal caso i seja negativo
         if ((i >> 25) == 1)
@@ -1025,12 +1025,12 @@ int main (int argc, char* argv[]) {
       case 0b110111:
         // bun - desvio incondicional
         pcAntigo = R[29];
-        // i(26 bits menos significativos) = R[28] & 0x03FFFFFF;
+        // i(26 bits menos significativos)
         i = R[28] & 0x03FFFFFF;
         // extensão de sinal caso i seja negativo
         if ((i >> 25) == 1)
           i += 0xFC000000;
-
+          
         R[29] = R[29] + i;
         
         sprintf(instrucao, "bun %i", i);
@@ -1044,6 +1044,7 @@ int main (int argc, char* argv[]) {
         // extensão de sinal caso i seja negativo
         if ((i >> 25) == 1)
           i += 0xFC000000;
+
         if ((R[31] & 0x00000020) >> 5 == 1) R[29] = R[29] + i;
         
         sprintf(instrucao, "bzd %i", i);
