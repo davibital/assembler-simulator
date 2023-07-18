@@ -158,12 +158,12 @@ int main (int argc, char* argv[]) {
     uint8_t z = 0, x = 0, y = 0, l = 0, v = 0, w = 0;
     char zName[5], xName[5], yName[5], lName[5], vName[5], wName[5];
     char vHex[11], wHex[11], xHex[11], yHex[11], zHex[11];
-    int32_t i = 0, xxyl;
-    uint64_t rzry;
-    uint32_t pcAntigo = 0, spAntigo = 0, xyl;
+    int32_t i = 0, xxyl = 0;
+    uint64_t rzry = 0;
+    uint32_t pcAntigo = 0, spAntigo = 0, xyl = 0;
 
     // resultado - variável de 64 bits para verificar carry e overflow em casos de operações matemáticas básicas (+, -, *)
-    uint64_t resultado;
+    uint64_t resultado = 0;
 
     // Instrução de 32 bits indexada pelo PC(R29) sendo armazenada no IR(R28)
     R[28] = MEM32[R[29]];
@@ -173,11 +173,13 @@ int main (int argc, char* argv[]) {
 
     switch (codigoInstrucao) {
       case 0b000000:
+        // mov - atribuição imediata (sem sinal)
         z = (R[28] & 0x03E00000) >> 21;
         xyl = R[28] & 0x001FFFFF;
         
-        // mov - atribuição imediata (sem sinal)
-        R[z] = xyl;
+        // R0 sempre será 0
+        if (z != 0)
+          R[z] = xyl;
 
         formatR(zName, z);
 
@@ -194,7 +196,9 @@ int main (int argc, char* argv[]) {
         if ((xxyl & 0x00100000) >> 20 == 0b1)
           xxyl += 0xFFE00000;
 
-        R[z] = xxyl;
+        // R0 sempre será 0
+        if (z != 0)
+          R[z] = xxyl;
 
         formatR(zName, z);
 
@@ -208,8 +212,10 @@ int main (int argc, char* argv[]) {
         x = (R[28] & 0x001F0000) >> 16;
         y = (R[28] & 0x0000F800) >> 11;
 
-        resultado = (uint64_t)(R[x]) + (uint64_t)(R[y]);
-        R[z] = R[x] + R[y];
+        if (z != 0) {
+          resultado = (uint64_t)(R[x]) + (uint64_t)(R[y]);
+          R[z] = R[x] + R[y];
+        }
 
         // ZN <- R[z] = 0
         updateZN(&R[31], R[z] == 0);
@@ -236,8 +242,10 @@ int main (int argc, char* argv[]) {
         x = (R[28] & 0x001F0000) >> 16;
         y = (R[28] & 0x0000F800) >> 11;
 
-        resultado = (uint64_t)(R[x]) - (uint64_t)(R[y]);
-        R[z] = R[x] - R[y];
+        if (z != 0) {
+          resultado = (uint64_t)(R[x]) - (uint64_t)(R[y]);
+          R[z] = R[x] - R[y];
+        }
 
         // ZN <- R[z] = 0
         updateZN(&R[31], R[z] == 0);
@@ -270,13 +278,13 @@ int main (int argc, char* argv[]) {
             // mul - operação de multiplicação com registradores (sem sinal)
             // R[l] : R[z] = R[x] * R[y]
             uint64_t mul = (uint64_t)R[x] * (uint64_t)R[y];
-            R[z] = mul;
-            R[l] = mul >> 32;
-            if (z == 0) R[z] = 0;
-            if (l == 0) R[l] = 0;
+            if (z != 0)
+              R[z] = mul;
+            if (l != 0)
+              R[l] = mul >> 32;
 
             // ZN <- R[l] : R[z] = 0
-            updateZN(&R[31], mul == 0);
+            updateZN(&R[31], R[l] == 0 && R[z] == 0);
             // CY <- R[l] != 0
             updateCY(&R[31], R[l] != 0);
 
@@ -297,13 +305,13 @@ int main (int argc, char* argv[]) {
             // R[z] : R[x] = (R[z] : R[y]) * 2 ** (l + 1)
             rzry = (uint64_t)(R[z]) << 32 | (uint64_t)(R[y]);
             uint64_t sll = rzry << (l + 1);
-            R[x] = sll;
-            R[z] = sll >> 32;
-            if (x == 0) R[x] = 0;
-            if (z == 0) R[z] = 0;
+            if (x != 0)
+              R[x] = sll;
+            if (z != 0)
+              R[z] = sll >> 32;
 
             // ZN <- R[z] : R[x] = 0
-            updateZN(&R[31], sll == 0);
+            updateZN(&R[31], R[z] == 0 && R[x] == 0);
             // CY <- R[z] != 0
             updateCY(&R[31], R[z] != 0);
 
@@ -321,13 +329,13 @@ int main (int argc, char* argv[]) {
             // muls - operação de multiplicação com registradores (com sinal)
             // R[l] : R[z] = R[x] * R[y]
             int64_t muls = (int64_t)(R[x]) * (int64_t)(R[y]);
-            R[z] = muls;
-            R[l] = muls >> 32;
-            if (l == 0) R[l] = 0;
-            if (z == 0) R[z] = 0;
+            if (z != 0)
+              R[z] = muls;
+            if (l != 0)
+              R[l] = muls >> 32;
             
             // ZN <- R[l] : R[z] = 0
-            updateZN(&R[31], muls == 0);
+            updateZN(&R[31], R[l] == 0 && R[z] == 0);
             // OV <- R[l] != 0
             updateOV(&R[31], R[l] != 0);
 
@@ -346,15 +354,15 @@ int main (int argc, char* argv[]) {
           case 0b011:
             // sla - operação de deslocamento para esquerda (com sinal)
             // R[z] : R[x] = (R[z] : R[y]) * 2 ** (l + 1)
-            rzry = (int64_t)(R[z]) << 32 | (int64_t)(R[y]);
+            rzry = (uint64_t)(R[z]) << 32 | (uint64_t)(R[y]);
             int64_t sla = rzry << (l + 1);
-            R[x] = sla;
-            R[z] = sla >> 32;
-            if (z == 0) R[z] = 0;
-            if (x == 0) R[x] = 0;
+            if (x != 0)
+              R[x] = sla;
+            if (z != 0)
+              R[z] = sla >> 32;
 
             // ZN <- R[z] : R[x] = 0
-            updateZN(&R[31], sla == 0);
+            updateZN(&R[31], R[z] == 0 && R[x] == 0);
             // OV <- R[z] != 0
             updateOV(&R[31], R[z] != 0);
 
@@ -372,11 +380,11 @@ int main (int argc, char* argv[]) {
             // div - operação de divisão com registradores (sem sinal)
             if (R[y] != 0) {
               // R[l] = R[x] mod R[y]
-              R[l] = R[x] % R[y];
-              if (l == 0) R[l] = 0;
+              if (l != 0)
+                R[l] = R[x] % R[y];
               // R[z] = R[x] ÷ R[y]
-              R[z] = R[x] / R[y];
-              if (z == 0) R[z] = 0;
+              if (z != 0)
+                R[z] = R[x] / R[y];
             }
 
             // ZN <- R[z] = 0
@@ -403,13 +411,13 @@ int main (int argc, char* argv[]) {
             // R[z] : R[x] = (R[z] : R[y]) ~ 2 ** (l + 1)
             rzry = (uint64_t)(R[z]) << 32 | (uint64_t)(R[y]);
             uint64_t srl = rzry >> (l + 1);
-            R[x] = srl;
-            R[z] = srl >> 32;
-            if (z == 0) R[z] = 0;
-            if (x == 0) R[x] = 0;
+            if (x != 0)
+              R[x] = srl;
+            if (z != 0)
+              R[z] = srl >> 32;
 
             // ZN <- R[z] : R[x] = 0
-            updateZN(&R[31], srl == 0);
+            updateZN(&R[31], R[z] == 0 && R[x] == 0);
             // CY <- R[z] != 0
             updateCY(&R[31], R[z] != 0);
 
@@ -425,14 +433,13 @@ int main (int argc, char* argv[]) {
             break;
           case 0b110:
             // divs - operação de divisão com registradores (com sinal)
-            R[l] = (int32_t) R[l];
             if (R[y] != 0) {
               // R[l] = R[x] mod R[y]
-              R[l] = R[x] % R[y];
-              if (l == 0) R[l] = 0;
+              if (l != 0)
+                R[l] = R[x] % R[y];
               // R[z] = R[x] ÷ R[y]
-              R[z] = R[x] / R[y];
-              if (z == 0) R[z] = 0;
+              if (z != 0)
+                R[z] = R[x] / R[y];
             }
 
             // ZN <- R[z] = 0
@@ -457,15 +464,15 @@ int main (int argc, char* argv[]) {
           case 0b111:
             // sra - operação de deslocamento para direita (com sinal)
             // R[z] : R[x] = (R[z] : R[y]) ~ 2 ** (l + 1)
-            rzry = (int64_t)(R[z]) << 32 | (int64_t)(R[y]);
+            rzry = (uint64_t)(R[z]) << 32 | (uint64_t)(R[y]);
             int64_t sra = rzry >> (l + 1);
-            R[x] = sra;
-            R[z] = sra >> 32;
-            if (z == 0) R[z] = 0;
-            if (x == 0) R[x] = 0;
+            if (x != 0)
+              R[x] = sra;
+            if (z != 0)
+              R[z] = sra >> 32;
 
             // ZN <- R[z] : R[x] = 0
-            updateZN(&R[31], sra == 0);
+            updateZN(&R[31], R[z] == 0 && R[y] == 0);
             // OV <- R[z] != 0
             updateOV(&R[31], R[z] != 0);
 
@@ -511,8 +518,9 @@ int main (int argc, char* argv[]) {
         z = (R[28] & 0x03E00000) >> 21;
         x = (R[28] & 0x001F0000) >> 16;
         y = (R[28] & 0x0000F800) >> 11;
-
-        R[z] = R[x] & R[y];
+        
+        if (z != 0)
+          R[z] = R[x] & R[y];
 
         // ZN <- R[z] = 0
         updateZN(&R[31], R[z] == 0);
@@ -535,7 +543,8 @@ int main (int argc, char* argv[]) {
         x = (R[28] & 0x001F0000) >> 16;
         y = (R[28] & 0x0000F800) >> 11;
 
-        R[z] = R[x] | R[y];
+        if (z != 0)
+          R[z] = R[x] | R[y];
 
         // ZN <- R[z] = 0
         updateZN(&R[31], R[z] == 0);
@@ -557,7 +566,8 @@ int main (int argc, char* argv[]) {
         z = (R[28] & 0x03E00000) >> 21;
         x = (R[28] & 0x001F0000) >> 16;
 
-        R[z] = ~R[x];
+        if (z != 0)
+          R[z] = ~R[x];
 
         // ZN <- R[z] = 0
         updateZN(&R[31], R[z] == 0);
@@ -578,7 +588,8 @@ int main (int argc, char* argv[]) {
         x = (R[28] & 0x001F0000) >> 16;
         y = (R[28] & 0x0000F800) >> 11;
 
-        R[z] = R[x] ^ R[y];
+        if (z != 0)
+          R[z] = R[x] ^ R[y];
 
         // ZN <- R[z] = 0
         updateZN(&R[31], R[z] == 0);
@@ -600,12 +611,14 @@ int main (int argc, char* argv[]) {
         z = (R[28] & 0x03E00000) >> 21;
         x = (R[28] & 0x001F0000) >> 16;
         i = (R[28] & 0x0000FFFF);
-
+        // extensão de sinal caso i seja negativo
         if ((i >> 15) == 0b1)
           i += 0xFFFF0000;
 
-        resultado = (uint64_t)R[x] + (int64_t)i;
-        R[z] = R[x] + i;
+        if (z != 0) {
+          resultado = (uint64_t)R[x] + (int64_t)i;
+          R[z] = R[x] + i;
+        }
 
         // ZN <- R[z] = 0
         updateZN(&R[31], R[z] == 0);
@@ -629,11 +642,14 @@ int main (int argc, char* argv[]) {
         z = (R[28] & 0x03E00000) >> 21;
         x = (R[28] & 0x001F0000) >> 16;
         i = (R[28] & 0x0000FFFF);
+        // extensão de sinal caso i seja negativo
         if ((i >> 15) == 0b1)
           i += 0xFFFF0000;
 
-        resultado = (uint64_t)R[x] - (int64_t)i;
-        R[z] = R[x] - i;
+        if (z != 0) {
+          resultado = (uint64_t)R[x] - (int64_t)i;
+          R[z] = R[x] - i;
+        }
 
         // ZN <- R[z] = 0
         updateZN(&R[31], R[z] == 0);
@@ -657,12 +673,14 @@ int main (int argc, char* argv[]) {
         z = (R[28] & 0x03E00000) >> 21;
         x = (R[28] & 0x001F0000) >> 16;
         i = (R[28] & 0x0000FFFF);
-
+        // extensão de sinal caso i seja negativo
         if ((i >> 15) == 0b1)
           i += 0xFFFF0000;
 
-        resultado = (uint64_t)R[x] * (int64_t)i;
-        R[z] = R[x] * i;
+        if (z != 0) {
+          resultado = (uint64_t)R[x] * (int64_t)i;
+          R[z] = R[x] * i;
+        }
 
         // ZN <- R[z] = 0
         updateZN(&R[31], R[z] == 0);
@@ -681,10 +699,12 @@ int main (int argc, char* argv[]) {
         // divi - operação de divisão imediata
         z = (R[28] & 0x03E00000) >> 21;
         x = (R[28] & 0x001F0000) >> 16;
-        i = (int16_t)(R[28] & 0x0000FFFF);
-        i = (int32_t) i;
+        i = (R[28] & 0x0000FFFF);
+        // extensão de sinal caso i seja negativo
+        if ((i >> 15) == 0b1)
+          i += 0xFFFF0000;
 
-        if (i != 0)
+        if (i != 0 && z != 0)
           R[z] = R[x] / i;
 
         // OV <- 0
@@ -706,10 +726,13 @@ int main (int argc, char* argv[]) {
         // modi - operação de resto imediato
         z = (R[28] & 0x03E00000) >> 21;
         x = (R[28] & 0x001F0000) >> 16;
-        i = (int16_t)(R[28] & 0x0000FFFF);
-        i = (int32_t) i;
+        i = (R[28] & 0x0000FFFF);
+        // extensão de sinal caso i seja negativo
+        if ((i >> 15) == 0b1)
+          i += 0xFFFF0000;
 
-        R[z] = R[i] % i;
+        if (z != 0 && i != 0)
+          R[z] = R[x] % i;
 
         // OV <- 0
         R[31] = R[31] & (~0x00000008);
@@ -729,8 +752,10 @@ int main (int argc, char* argv[]) {
       case 0b010111:
         // cmpi - comparação imediata
         x = (R[28] & 0x001F0000) >> 16;
-        i = (int16_t)(R[28] & 0x0000FFFF);
-        i = (int32_t) i;
+        i = (R[28] & 0x0000FFFF);
+        // extensão de sinal caso i seja negativo
+        if ((i >> 15) == 0b1)
+          i += 0xFFFF0000;
         
         int64_t cmpi = (int64_t)R[x] - (int64_t)i;
 
@@ -851,7 +876,7 @@ int main (int argc, char* argv[]) {
 
         if ((R[31] & 0x00000001) == 0) R[29] = R[29] + i;
 
-        sprintf(instrucao, "bbe %i", i);
+        sprintf(instrucao, "bae %i", i);
         fprintf(output, "0x%08X:\t%-25s\tPC=0x%08X\n", pcAntigo * 4, instrucao, (R[29] + 1) * 4);
         break;
       case 0b101011:
@@ -1193,7 +1218,7 @@ int main (int argc, char* argv[]) {
         y = (R[28] & 0x0000F800) >> 11;
         v = (R[28] & 0x000007C0) >> 6;
         w = R[28] & 0x0000001F;
-        spAntigo = R[30] + 4;
+        spAntigo = R[30];
 
         if (v != 0) {
           // SP = SP + 4
