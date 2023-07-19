@@ -12,17 +12,17 @@ uint8_t compare2 (uint8_t v1, uint8_t v2) {
 }
 
 uint8_t compare3 (uint8_t v1, uint8_t v2, uint8_t v3) {
-  if ((v1 != 0 || v2 != 0) && v3 != 0) return 1;
+  if (v1 != 0 && v2 != 0 && v3 != 0) return 1;
   return 0;
 }
 
 uint8_t compare4 (uint8_t v1, uint8_t v2, uint8_t v3, uint8_t v4) {
-  if ((v1 != 0 || v2 != 0 || v3 != 0) && v4 != 0) return 1;
+  if (v1 != 0 && v2 != 0 && v3 != 0 && v4 != 0) return 1;
   return 0;
 }
 
 uint8_t compare5 (uint8_t v1, uint8_t v2, uint8_t v3, uint8_t v4, uint8_t v5) {
-  if ((v1 != 0 || v2 != 0 || v3 != 0 || v4 != 0) && v5 != 0) return 1;
+  if (v1 != 0 && v2 != 0 && v3 != 0 && v4 != 0 && v5 != 0) return 1;
   return 0;
 }
 
@@ -1156,30 +1156,34 @@ int main (int argc, char* argv[]) {
           MEM32[R[30]] = R[v];
           // SP = SP - 4;
           R[30] -= 4;
-        } 
-        if (w != 0) {
-          // MEM[SP] = R[i]
-          MEM32[R[30]] = R[w];
-          // SP = SP - 4;
-          R[30] -= 4;
-        }
-        if (x != 0) {
-          // MEM[SP] = R[i]
-          MEM32[R[30]] = R[x];
-          // SP = SP - 4;
-          R[30] -= 4;
-        }
-        if (y != 0) {
-          // MEM[SP] = R[i]
-          MEM32[R[30]] = R[y];
-          // SP = SP - 4;
-          R[30] -= 4;
-        }
-        if (z != 0) {
-          // MEM[SP] = R[i]
-          MEM32[R[30]] = R[z];
-          // SP = SP - 4;
-          R[30] -= 4;
+
+          if (w != 0) {
+            // MEM[SP] = R[i]
+            MEM32[R[30]] = R[w];
+            // SP = SP - 4;
+            R[30] -= 4;
+
+            if (x != 0) {
+              // MEM[SP] = R[i]
+              MEM32[R[30]] = R[x];
+              // SP = SP - 4;
+              R[30] -= 4;
+              
+              if (y != 0) {
+                // MEM[SP] = R[i]
+                MEM32[R[30]] = R[y];
+                // SP = SP - 4;
+                R[30] -= 4;
+                
+                if (z != 0) {
+                  // MEM[SP] = R[i]
+                  MEM32[R[30]] = R[z];
+                  // SP = SP - 4;
+                  R[30] -= 4;
+                }
+              }
+            }
+          }
         }
 
         formatR(vName, v);
@@ -1188,12 +1192,12 @@ int main (int argc, char* argv[]) {
         formatR(yName, y);
         formatR(zName, z);
 
-        if (v == 0 && w == 0 && x == 0 && y == 0 && z == 0) {
+        if (v == 0) {
           sprintf(instrucao, "push -");
           fprintf(output, "0x%08X:\t%-25s\tMEM[0x%08X]{}={}\n", R[29] * 4, instrucao, spAntigo);
         }
         else {
-          sprintf(instrucao, "push %s%s%s%s%s%s%s%s%s", (v != 0) ? vName : "", compare2(v, w) ? "," : "", (w != 0) ? wName : "", compare3(v, w, x) ? "," : "", (x != 0) ? xName : "", compare4(v, w, x, y) ? "," : "", (y != 0) ? yName : "", compare5(v, w, x, y, z) ? "," : "", (z != 0) ? zName : "");
+          sprintf(instrucao, "push %s%s%s%s%s%s%s%s%s", (v != 0) ? vName : "", compare2(v, w) ? "," : "", compare2(v, w) ? wName : "", compare3(v, w, x) ? "," : "", compare3(v, w, x) ? xName : "", compare4(v, w, x, y) ? "," : "", compare4(v, w, x, y) ? yName : "", compare5(v, w, x, y, z) ? "," : "", compare5(v, w, x, y, z) ? zName : "");
 
           toUpperCase(vName);
           toUpperCase(wName);
@@ -1207,7 +1211,7 @@ int main (int argc, char* argv[]) {
           sprintf(yHex, "0x%08X", R[y]);
           sprintf(zHex, "0x%08X", R[z]);
 
-          fprintf(output, "0x%08X:\t%-25s\tMEM[0x%08X]{%s%s%s%s%s%s%s%s%s}={%s%s%s%s%s%s%s%s%s}\n", R[29] * 4, instrucao, spAntigo, (v != 0) ? vHex : "", compare2(v, w) ? "," : "", (w != 0) ? wHex : "", compare3(v, w, x) ? "," : "", (x != 0) ? xHex : "", compare4(v, w, x, y) ? "," : "", (y != 0) ? yHex : "", compare5(v, w, x, y, z) ? "," : "", (z != 0) ? zHex : "", (v != 0) ? vName : "", compare2(v, w) ? "," : "", (w != 0) ? wName : "", compare3(v, w, x) ? "," : "", (x != 0) ? xName : "", compare4(v, w, x, y) ? "," : "", (y != 0) ? yName : "", compare5(v, w, x, y, z) ? "," : "", (z != 0) ? zName : "");
+          fprintf(output, "0x%08X:\t%-25s\tMEM[0x%08X]{%s%s%s%s%s%s%s%s%s}={%s%s%s%s%s%s%s%s%s}\n", R[29] * 4, instrucao, spAntigo, (v != 0) ? vHex : "", compare2(v, w) ? "," : "", compare2(v, w) ? wHex : "", compare3(v, w, x) ? "," : "", compare3(v, w, x) ? xHex : "", compare4(v, w, x, y) ? "," : "", compare4(v, w, x, y) ? yHex : "", compare5(v, w, x, y, z) ? "," : "", compare5(v, w, x, y, z) ? zHex : "", (v != 0) ? vName : "", compare2(v, w) ? "," : "", compare2(v, w) ? wName : "", compare3(v, w, x) ? "," : "", compare3(v, w, x) ? xName : "", compare4(v, w, x, y) ? "," : "", compare4(v, w, x, y) ? yName : "", compare5(v, w, x, y, z) ? "," : "", compare5(v, w, x, y, z) ? zName : "");
         }
         break;
       case 0b001011:
@@ -1225,30 +1229,34 @@ int main (int argc, char* argv[]) {
           R[30] += 4;
           // R[i] = MEM[SP]
           R[v] = MEM32[R[30]];
-        } 
-        if (w != 0) {
-          // SP = SP + 4
-          R[30] += 4;
-          // R[i] = MEM[SP]
-          R[w] = MEM32[R[30]];
-        }
-        if (x != 0) {
-          // SP = SP + 4
-          R[30] += 4;
-          // R[i] = MEM[SP]
-          R[x] = MEM32[R[30]];
-        }
-        if (y != 0) {
-          // SP = SP + 4
-          R[30] += 4;
-          // R[i] = MEM[SP]
-          R[y] = MEM32[R[30]];
-        }
-        if (z != 0) {
-          // SP = SP + 4
-          R[30] += 4;
-          // R[i] = MEM[SP]
-          R[z] = MEM32[R[30]];
+          
+          if (w != 0) {
+            // SP = SP + 4
+            R[30] += 4;
+            // R[i] = MEM[SP]
+            R[w] = MEM32[R[30]];
+            
+            if (x != 0) {
+              // SP = SP + 4
+              R[30] += 4;
+              // R[i] = MEM[SP]
+              R[x] = MEM32[R[30]];
+              
+              if (y != 0) {
+                // SP = SP + 4
+                R[30] += 4;
+                // R[i] = MEM[SP]
+                R[y] = MEM32[R[30]];
+                
+                if (z != 0) {
+                  // SP = SP + 4
+                  R[30] += 4;
+                  // R[i] = MEM[SP]
+                  R[z] = MEM32[R[30]];
+                }
+              }
+            }
+          }
         }
 
         formatR(vName, v);
@@ -1257,11 +1265,12 @@ int main (int argc, char* argv[]) {
         formatR(yName, y);
         formatR(zName, z);
 
-        if (v == 0 && w == 0 && x == 0 && y == 0 && z == 0) {
+        if (v == 0) {
           sprintf(instrucao, "pop -");
+          fprintf(output, "0x%08X:\t%-25s\t{}=MEM[0x%08X]{}\n", R[29] * 4, instrucao, spAntigo);
         }
         else {
-          sprintf(instrucao, "pop %s%s%s%s%s%s%s%s%s", (v != 0) ? vName : "", compare2(v, w) ? "," : "", (w != 0) ? wName : "", compare3(v, w, x) ? "," : "", (x != 0) ? xName : "", compare4(v, w, x, y) ? "," : "", (y != 0) ? yName : "", compare5(v, w, x, y, z) ? "," : "", (z != 0) ? zName : "");
+          sprintf(instrucao, "pop %s%s%s%s%s%s%s%s%s", (v != 0) ? vName : "", compare2(v, w) ? "," : "", compare2(v, w) ? wName : "", compare3(v, w, x) ? "," : "", compare3(v, w, x) ? xName : "", compare4(v, w, x, y) ? "," : "", compare4(v, w, x, y) ? yName : "", compare5(v, w, x, y, z) ? "," : "", compare5(v, w, x, y, z) ? zName : "");
 
           toUpperCase(vName);
           toUpperCase(wName);
@@ -1275,7 +1284,7 @@ int main (int argc, char* argv[]) {
           sprintf(yHex, "0x%08X", R[y]);
           sprintf(zHex, "0x%08X", R[z]);
 
-          fprintf(output, "0x%08X:\t%-25s\t{%s%s%s%s%s%s%s%s%s}=MEM[0x%08X]{%s%s%s%s%s%s%s%s%s}\n", R[29] * 4, instrucao, (v != 0) ? vName : "", compare2(v, w) ? "," : "", (w != 0) ? wName : "", compare3(v, w, x) ? "," : "", (x != 0) ? xName : "", compare4(v, w, x, y) ? "," : "", (y != 0) ? yName : "", compare5(v, w, x, y, z) ? "," : "", (z != 0) ? zName : "", spAntigo, (v != 0) ? vHex : "", compare2(v, w) ? "," : "", (w != 0) ? wHex : "", compare3(v, w, x) ? "," : "", (x != 0) ? xHex : "", compare4(v, w, x, y) ? "," : "", (y != 0) ? yHex : "", compare5(v, w, x, y, z) ? "," : "", (z != 0) ? zHex : "");
+          fprintf(output, "0x%08X:\t%-25s\t{%s%s%s%s%s%s%s%s%s}=MEM[0x%08X]{%s%s%s%s%s%s%s%s%s}\n", R[29] * 4, instrucao, (v != 0) ? vName : "", compare2(v, w) ? "," : "", compare2(v, w) ? wName : "", compare3(v, w, x) ? "," : "", compare3(v, w, x) ? xName : "", compare4(v, w, x, y) ? "," : "", compare4(v, w, x, y) ? yName : "", compare5(v, w, x, y, z) ? "," : "", compare5(v, w, x, y, z) ? zName : "", spAntigo, (v != 0) ? vHex : "", compare2(v, w) ? "," : "", compare2(v, w) ? wHex : "", compare3(v, w, x) ? "," : "", compare3(v, w, x) ? xHex : "", compare4(v, w, x, y) ? "," : "", compare4(v, w, x, y) ? yHex : "", compare5(v, w, x, y, z) ? "," : "", compare5(v, w, x, y, z) ? zHex : "");
         }
         break;
       default:
