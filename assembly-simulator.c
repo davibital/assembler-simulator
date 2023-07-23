@@ -30,17 +30,7 @@ uint8_t compare4 (uint8_t v1, uint8_t v2, uint8_t v3, uint8_t v4);
 
 uint8_t compare5 (uint8_t v1, uint8_t v2, uint8_t v3, uint8_t v4, uint8_t v5);
 
-void updateZN (uint32_t* SR, uint8_t condicao);
-
-void updateZD (uint32_t* SR, uint8_t condicao);
-
-void updateSN (uint32_t* SR, uint8_t condicao);
-
-void updateOV (uint32_t* SR, uint8_t condicao);
-
-void updateIV (uint32_t* SR, uint8_t condicao);
-
-void updateCY (uint32_t* SR, uint8_t condicao);
+void updateSR (uint32_t* SR, char field[], uint8_t condition);
 
 void formatR (char RName[5], uint8_t R);
 
@@ -164,13 +154,13 @@ int main (int argc, char* argv[]) {
         }
 
         // ZN <- R[z] = 0
-        updateZN(&R[31], R[z] == 0);
+        updateSR(&R[31], "ZN", R[z] == 0);
         // SN <- R[z] bit 31 = 1
-        updateSN(&R[31], ((R[z] >> 31) & 0b1) == 0b1);
+        updateSR(&R[31], "SN", ((R[z] >> 31) & 0b1) == 0b1);
         // OV <- R[x] bit 31 = R[y] bit 31 && R[z] bit 31 != R[x] bit 31
-        updateOV(&R[31], ((R[x] >> 31) & 0b1) == ((R[y] >> 31) & 0b1) && ((R[z] >> 31) & 0b1) != ((R[x] >> 31) & 0b1));
+        updateSR(&R[31], "OV", ((R[x] >> 31) & 0b1) == ((R[y] >> 31) & 0b1) && ((R[z] >> 31) & 0b1) != ((R[x] >> 31) & 0b1));
         // CY <- R[z] bit 32 = 1
-        updateCY(&R[31], ((resultado >> 32) & 0b1) == 0b1);
+        updateSR(&R[31], "CY", ((resultado >> 32) & 0b1) == 0b1);
 
         formatR(zName, z);
         formatR(xName, x);
@@ -192,13 +182,13 @@ int main (int argc, char* argv[]) {
         }
 
         // ZN <- R[z] = 0
-        updateZN(&R[31], R[z] == 0);
+        updateSR(&R[31], "ZN", R[z] == 0);
         // SN <- R[z] bit 31 = 1
-        updateSN(&R[31], ((R[z] >> 31) & 0b1) == 0b1);
+        updateSR(&R[31], "SN", ((R[z] >> 31) & 0b1) == 0b1);
         // OV <- R[x] bit 31 != R[y] bit 31 && R[z] bit 31 != R[x] bit 31
-        updateOV(&R[31], ((R[x] >> 31) & 0b1) != ((R[y] >> 31) & 0b1) && ((R[z] >> 31) & 0b1) != ((R[x] >> 31) & 0b1));
+        updateSR(&R[31], "OV", ((R[x] >> 31) & 0b1) != ((R[y] >> 31) & 0b1) && ((R[z] >> 31) & 0b1) != ((R[x] >> 31) & 0b1));
         // CY <- R[z] bit 32 = 1
-        updateCY(&R[31], ((resultado >> 32) & 0b1) == 0b1);
+        updateSR(&R[31], "CY", ((resultado >> 32) & 0b1) == 0b1);
 
         formatR(zName, z);
         formatR(xName, x);
@@ -227,9 +217,9 @@ int main (int argc, char* argv[]) {
               R[l] = mul >> 32;
 
             // ZN <- R[l] : R[z] = 0
-            updateZN(&R[31], R[l] == 0 && R[z] == 0);
+            updateSR(&R[31], "ZN", R[l] == 0 && R[z] == 0);
             // CY <- R[l] != 0
-            updateCY(&R[31], R[l] != 0);
+            updateSR(&R[31], "CY", R[l] != 0);
 
             formatR(zName, z);
             formatR(xName, x);
@@ -254,9 +244,9 @@ int main (int argc, char* argv[]) {
               R[z] = sll >> 32;
 
             // ZN <- R[z] : R[x] = 0
-            updateZN(&R[31], R[z] == 0 && R[x] == 0);
+            updateSR(&R[31], "ZN", R[z] == 0 && R[x] == 0);
             // CY <- R[z] != 0
-            updateCY(&R[31], R[z] != 0);
+            updateSR(&R[31], "CY", R[z] != 0);
 
             formatR(zName, z);
             formatR(xName, x);
@@ -278,9 +268,9 @@ int main (int argc, char* argv[]) {
               R[l] = muls >> 32;
             
             // ZN <- R[l] : R[z] = 0
-            updateZN(&R[31], R[l] == 0 && R[z] == 0);
+            updateSR(&R[31], "ZN", R[l] == 0 && R[z] == 0);
             // OV <- R[l] != 0
-            updateOV(&R[31], R[l] != 0);
+            updateSR(&R[31], "OV", R[l] != 0);
 
             formatR(zName, z);
             formatR(xName, x);
@@ -305,9 +295,9 @@ int main (int argc, char* argv[]) {
               R[z] = sla >> 32;
 
             // ZN <- R[z] : R[x] = 0
-            updateZN(&R[31], R[z] == 0 && R[x] == 0);
+            updateSR(&R[31], "ZN", R[z] == 0 && R[x] == 0);
             // OV <- R[z] != 0
-            updateOV(&R[31], R[z] != 0);
+            updateSR(&R[31], "OV", R[z] != 0);
 
             formatR(zName, z);
             formatR(xName, x);
@@ -331,11 +321,11 @@ int main (int argc, char* argv[]) {
             }
 
             // ZN <- R[z] = 0
-            updateZN(&R[31], R[z] == 0);
+            updateSR(&R[31], "ZN", R[z] == 0);
             // ZD <- R[y] = 0
-            updateZD(&R[31], R[y] == 0);
+            updateSR(&R[31], "ZD", R[y] == 0);
             // CY <- R[l] != 0
-            updateCY(&R[31], R[l] != 0);
+            updateSR(&R[31], "CY", R[l] != 0);
 
             formatR(zName, z);
             formatR(xName, x);
@@ -360,9 +350,9 @@ int main (int argc, char* argv[]) {
               R[z] = srl >> 32;
 
             // ZN <- R[z] : R[x] = 0
-            updateZN(&R[31], R[z] == 0 && R[x] == 0);
+            updateSR(&R[31], "ZN", R[z] == 0 && R[x] == 0);
             // CY <- R[z] != 0
-            updateCY(&R[31], R[z] != 0);
+            updateSR(&R[31], "CY", R[z] != 0);
 
             formatR(zName, z);
             formatR(xName, x);
@@ -386,11 +376,11 @@ int main (int argc, char* argv[]) {
             }
 
             // ZN <- R[z] = 0
-            updateZN(&R[31], R[z] == 0);
+            updateSR(&R[31], "ZN", R[z] == 0);
             // ZD <- R[y] = 0
-            updateZD(&R[31], R[y] == 0);
+            updateSR(&R[31], "ZD", R[y] == 0);
             // OV <- R[l] != 0
-            updateOV(&R[31], R[l] != 0);
+            updateSR(&R[31], "OV", R[l] != 0);
 
             formatR(zName, z);
             formatR(xName, x);
@@ -415,9 +405,9 @@ int main (int argc, char* argv[]) {
               R[z] = sra >> 32;
 
             // ZN <- R[z] : R[x] = 0
-            updateZN(&R[31], R[z] == 0 && R[y] == 0);
+            updateSR(&R[31], "ZN", R[z] == 0 && R[y] == 0);
             // OV <- R[z] != 0
-            updateOV(&R[31], R[z] != 0);
+            updateSR(&R[31], "OV", R[z] != 0);
 
             formatR(zName, z);
             formatR(xName, x);
@@ -441,13 +431,13 @@ int main (int argc, char* argv[]) {
         uint64_t cmp = (uint64_t)R[x] - (uint64_t)R[y];
 
         // ZN <- CMP = 0
-        updateZN(&R[31], cmp == 0);
+        updateSR(&R[31], "ZN", cmp == 0);
         // SN <- CMP bit 31 = 1
-        updateSN(&R[31], ((cmp >> 31) & 0b1) == 0b1);
+        updateSR(&R[31], "SN", ((cmp >> 31) & 0b1) == 0b1);
         // OV <- (R[x] bit 31 != R[y] bit 31) && (CMP bit 31 != R[x] bit 31) 
-        updateOV(&R[31], ((R[x] >> 31) & 0b1) != (((R[y] >> 31) & 0b1)) && ((cmp >> 31) & 0b1) != ((R[z] >> 31) & 0b1));
+        updateSR(&R[31], "OV", ((R[x] >> 31) & 0b1) != (((R[y] >> 31) & 0b1)) && ((cmp >> 31) & 0b1) != ((R[z] >> 31) & 0b1));
         // CY <- CMP bit 32 = 1
-        updateCY(&R[31], ((cmp >> 32) & 0b1) == 0b1);
+        updateSR(&R[31], "CY", ((cmp >> 32) & 0b1) == 0b1);
 
         formatR(yName, y);
         formatR(xName, x);
@@ -463,9 +453,9 @@ int main (int argc, char* argv[]) {
           R[z] = R[x] & R[y];
 
         // ZN <- R[z] = 0
-        updateZN(&R[31], R[z] == 0);
+        updateSR(&R[31], "ZN", R[z] == 0);
         // SN <- R[z] bit 31 = 1
-        updateSN(&R[31], ((R[z] >> 31) & 0b1) == 0b1);
+        updateSR(&R[31], "SN", ((R[z] >> 31) & 0b1) == 0b1);
 
         formatR(zName, z);
         formatR(xName, x);
@@ -485,9 +475,9 @@ int main (int argc, char* argv[]) {
           R[z] = R[x] | R[y];
 
         // ZN <- R[z] = 0
-        updateZN(&R[31], R[z] == 0);
+        updateSR(&R[31], "ZN", R[z] == 0);
         // SN <- R[z] bit 31 = 1
-        updateSN(&R[31], ((R[z] >> 31) & 0b1) == 0b1);
+        updateSR(&R[31], "SN", ((R[z] >> 31) & 0b1) == 0b1);
 
         formatR(zName, z);
         formatR(xName, x);
@@ -507,9 +497,9 @@ int main (int argc, char* argv[]) {
           R[z] = ~R[x];
 
         // ZN <- R[z] = 0
-        updateZN(&R[31], R[z] == 0);
+        updateSR(&R[31], "ZN", R[z] == 0);
         // SN <- R[z] bit 31 = 1
-        updateSN(&R[31], ((R[z] >> 31) & 0b1) == 0b1);
+        updateSR(&R[31], "SN", ((R[z] >> 31) & 0b1) == 0b1);
 
         formatR(zName, z);
         formatR(xName, x);
@@ -527,9 +517,9 @@ int main (int argc, char* argv[]) {
           R[z] = R[x] ^ R[y];
 
         // ZN <- R[z] = 0
-        updateZN(&R[31], R[z] == 0);
+        updateSR(&R[31], "ZN", R[z] == 0);
         // SN <- R[z] bit 31 = 1
-        updateSN(&R[31], ((R[z] >> 31) & 0b1) == 0b1);
+        updateSR(&R[31], "SN", ((R[z] >> 31) & 0b1) == 0b1);
 
         formatR(zName, z);
         formatR(xName, x);
@@ -551,13 +541,13 @@ int main (int argc, char* argv[]) {
         }
 
         // ZN <- R[z] = 0
-        updateZN(&R[31], R[z] == 0);
+        updateSR(&R[31], "ZN", R[z] == 0);
         // SN <- R[z] bit 31 = 1
-        updateSN(&R[31], ((R[z] >> 31) & 0b1) == 0b1);
+        updateSR(&R[31], "SN", ((R[z] >> 31) & 0b1) == 0b1);
         // OV <- (R[x] bit 31 != i bit 15) && (R[z] bit 31 != R[x] bit 31) 
-        updateOV(&R[31], ((R[x] >> 31) & 0b1) != ((i >> 15) & 0b1) && ((R[z] >> 31) & 0b1) == ((R[x] >> 31) & 0b1));
+        updateSR(&R[31], "OV", ((R[x] >> 31) & 0b1) != ((i >> 15) & 0b1) && ((R[z] >> 31) & 0b1) != ((R[x] >> 31) & 0b1));
         // CY <- R[z] bit 32 = 1
-        updateCY(&R[31], ((resultado >> 32) & 0b1) == 1);
+        updateSR(&R[31], "CY", ((resultado >> 32) & 0b1) == 1);
 
         formatR(zName, z);
         formatR(xName, x);
@@ -577,13 +567,14 @@ int main (int argc, char* argv[]) {
         }
 
         // ZN <- R[z] = 0
-        updateZN(&R[31], R[z] == 0);
+        updateSR(&R[31], "ZN", R[z] == 0);
         // SN <- R[z] bit 31 = 1
-        updateSN(&R[31], (R[z] & 0x80000000) >> 31 == 0b1);
+        updateSR(&R[31], "SN", ((R[z] >> 31) & 0b1) == 0b1);
         // OV <- (R[x] bit 31 != i bit 15) && (R[z] bit 31 != R[x] bit 31) 
-        updateOV(&R[31], (R[x] & 0x80000000) >> 31 != i >> 15 && (R[z] & 0x80000000) >> 31 != (R[x] & 0x80000000) >> 31);
+        updateSR(&R[31], "OV", ((R[x] >> 31) & 0b1) != ((i >> 15) & 0b1) && ((R[z] >> 31) & 0b1) != ((R[x] >> 31) & 0b1));
         // CY <- R[z] bit 32 = 1
-        updateCY(&R[31], ((resultado >> 32) & 0b1) == 0b1);
+        updateSR(&R[31], "CY", ((resultado >> 32) & 0b1) == 1);
+
 
         formatR(zName, z);
         formatR(xName, x);
@@ -603,9 +594,9 @@ int main (int argc, char* argv[]) {
         }
 
         // ZN <- R[z] = 0
-        updateZN(&R[31], R[z] == 0);
+        updateSR(&R[31], "ZN", R[z] == 0);
         // OV <- R[z] bits 63 ao 32 != 0
-        updateOV(&R[31], (resultado >> 32) != 0);
+        updateSR(&R[31], "OV", (resultado >> 32) != 0);
 
         formatR(zName, z);
         formatR(xName, x);
@@ -625,9 +616,9 @@ int main (int argc, char* argv[]) {
         // OV <- 0
           R[31] = R[31] & (~0x00000008);
         // ZN <- R[z] = 0
-        updateZN(&R[31], R[z] == 0);
+        updateSR(&R[31], "ZN", R[z] == 0);
         // ZD <- i = 0
-        updateZD(&R[31], i == 0);
+        updateSR(&R[31], "ZD", i == 0);
 
         formatR(zName, z);
         formatR(xName, x);
@@ -647,9 +638,9 @@ int main (int argc, char* argv[]) {
         // OV <- 0
         R[31] = R[31] & (~0x00000008);
         // ZN <- R[z] = 0
-        updateZN(&R[31], R[z] == 0);
+        updateSR(&R[31], "ZN", R[z] == 0);
         // ZD <- i = 0
-        updateZD(&R[31], i == 0);
+        updateSR(&R[31], "ZD", i == 0);
 
         formatR(zName, z);
         formatR(xName, x);
@@ -666,13 +657,13 @@ int main (int argc, char* argv[]) {
         int64_t cmpi = (int64_t)R[x] - (int64_t)i;
 
         // ZN <- CMPI = 0
-        updateZN(&R[31], cmpi == 0);
+        updateSR(&R[31], "ZN", cmpi == 0);
         // SN <- CMPI bit 31 = 1
-        updateSN(&R[31], ((cmpi >> 31) & 0b1) == 0b1);
+        updateSR(&R[31], "SN", ((cmpi >> 31) & 0b1) == 0b1);
         // OV <- (R[x] bit 31 != i bit 15) && (CMPI bit 31 != R[x] bit 31) 
-        updateOV(&R[31], ((R[x] >> 31) & 0b1) != ((i >> 15) & 0b1) && ((cmpi >> 31) & 0b1) != ((R[x] >> 31) & 0b1));
+        updateSR(&R[31], "OV", ((R[x] >> 31) & 0b1) != ((i >> 15) & 0b1) && ((cmpi >> 31) & 0b1) != ((R[x] >> 31) & 0b1));
         // CY <- CMPI bit 32 = 1
-        updateCY(&R[31], ((cmpi >> 32) & 0b1) == 0b1);
+        updateSR(&R[31], "CY", ((cmpi >> 32) & 0b1) == 0b1);
 
         formatR(xName, x);
 
@@ -1214,45 +1205,34 @@ uint8_t compare5 (uint8_t v1, uint8_t v2, uint8_t v3, uint8_t v4, uint8_t v5) {
   return 0;
 }
 
-void updateZN (uint32_t* SR, uint8_t condicao) {
-  if (condicao == 1)
-    *SR = *SR | 0x00000040;
-  else
-    *SR = *SR & (~0x00000040);
-  return;
-}
+void updateSR (uint32_t* SR, char field[], uint8_t condition) {
 
-void updateZD (uint32_t* SR, uint8_t condicao) {
-  if (condicao == 1)
-    *SR = *SR | 0x00000020;
-  else
-    *SR = *SR & (~0x00000020);
-  return;
-}
-
-void updateSN (uint32_t* SR, uint8_t condicao) {
-  if (condicao == 1)
-    *SR = *SR | 0x00000010;
-  else
-    *SR = *SR & (~0x00000010);
-  return;
-}
-
-void updateOV (uint32_t* SR, uint8_t condicao) {
-  if (condicao == 1)
-    *SR = *SR | 0x00000008;
-  else
-    *SR = *SR & (~0x00000008);
-  return;
-}
-
-void updateIV (uint32_t* SR, uint8_t condicao);
-
-void updateCY (uint32_t* SR, uint8_t condicao) {
-  if (condicao == 1)
-    *SR = *SR | 0x00000001;
-  else
-    *SR = *SR & (~0x00000001);
+    if (strcmp(field, "ZN") == 0) {
+      if (condition == 1)
+        *SR = *SR | 0x00000040;
+      else
+        *SR = *SR & (~0x00000040);
+    } else if (strcmp(field, "ZD") == 0) {
+      if (condition == 1)
+        *SR = *SR | 0x00000020;
+      else
+        *SR = *SR & (~0x00000020);
+    } else if (strcmp(field, "SN") == 0) {
+      if (condition == 1)
+        *SR = *SR | 0x00000010;
+      else
+        *SR = *SR & (~0x00000010);
+    } else if (strcmp(field, "OV") == 0) {
+      if (condition == 1)
+        *SR = *SR | 0x00000008;
+      else
+        *SR = *SR & (~0x00000008);
+    } else if (strcmp(field, "CY") == 0) {
+      if (condition == 1)
+        *SR = *SR | 0x00000001;
+      else
+        *SR = *SR & (~0x00000001);
+    }
 }
 
 void formatR (char RName[5], uint8_t R) {
@@ -1283,3 +1263,7 @@ void formatR (char RName[5], uint8_t R) {
 }
 
 void toUpperCase(char* str) {
+  for (uint8_t i = 0; i < strlen(str); i++) {
+    str[i] = toupper(str[i]);
+  }
+}
