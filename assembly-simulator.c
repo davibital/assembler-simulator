@@ -6,6 +6,8 @@
 #include <ctype.h>
 #include <string.h>
 
+int64_t signalExtension64 (int number);
+
 void uTypeInstructionZXYVW (uint32_t* R, uint8_t* z, uint8_t* x, uint8_t* y, uint8_t* v, uint8_t* w);
 
 void uTypeInstructionZXYL (uint32_t* R, uint8_t* z, uint8_t* x, uint8_t* y, uint8_t* l);
@@ -24,15 +26,15 @@ void fTypeInstructionPCXI (uint32_t* pcAntigo, uint32_t* R, uint8_t* x, int32_t*
 
 void sTypeInstruction (uint32_t* pcAntigo, uint32_t* R, int32_t* i);
 
-uint8_t compare2 (uint8_t v1, uint8_t v2);
+int compare2 (uint8_t v1, uint8_t v2);
 
-uint8_t compare3 (uint8_t v1, uint8_t v2, uint8_t v3);
+int compare3 (uint8_t v1, uint8_t v2, uint8_t v3);
 
-uint8_t compare4 (uint8_t v1, uint8_t v2, uint8_t v3, uint8_t v4);
+int compare4 (uint8_t v1, uint8_t v2, uint8_t v3, uint8_t v4);
 
-uint8_t compare5 (uint8_t v1, uint8_t v2, uint8_t v3, uint8_t v4, uint8_t v5);
+int compare5 (uint8_t v1, uint8_t v2, uint8_t v3, uint8_t v4, uint8_t v5);
 
-void updateSR (uint32_t* SR, char field[], uint8_t condition);
+void updateSR (uint32_t* SR, char field[], int condition);
 
 void formatR (char RName[5], uint8_t R);
 
@@ -90,14 +92,14 @@ int main (int argc, char* argv[]) {
     SR = R[31];
     */
 
-    // Oper&&os da instrução
+    // Operandos da instrução
     uint8_t z = 0, x = 0, y = 0, l = 0, v = 0, w = 0;
     char zName[5], xName[5], yName[5], lName[5], vName[5], wName[5];
     char vHex[11], wHex[11], xHex[11], yHex[11], zHex[11];
     int32_t i = 0, xxyl = 0;
     uint32_t pcAntigo = 0, spAntigo = 0, xyl = 0;
 
-    // uresult - variável de 64 bits para verificar carry e overflow em casos de operações matemáticas básicas (+, -, *)
+    // uresult e result - variável de 64 bits para verificar carry e overflow em casos de operações matemáticas básicas (+, -, *)
     uint64_t uresult = 0;
     int64_t result = 0;
 
@@ -154,7 +156,7 @@ int main (int argc, char* argv[]) {
           uresult = (uint64_t)(R[x]) + (uint64_t)(R[y]);
           R[z] = R[x] + R[y];
         }
-
+        
         // ZN <- R[z] = 0
         updateSR(&R[31], "ZN", R[z] == 0);
         // SN <- R[z] bit 31 = 1
@@ -211,10 +213,8 @@ int main (int argc, char* argv[]) {
             // mul - operação de multiplicação com registradores (sem sinal)
             // R[l] : R[z] = R[x] * R[y]
             uint64_t mul = (uint64_t)R[x] * (uint64_t)R[y];
-            if (z != 0)
-              R[z] = mul;
-            if (l != 0)
-              R[l] = mul >> 32;
+            if (z != 0) R[z] = mul;
+            if (l != 0) R[l] = mul >> 32;
 
             // ZN <- R[l] : R[z] = 0
             updateSR(&R[31], "ZN", R[l] == 0 && R[z] == 0);
@@ -238,16 +238,14 @@ int main (int argc, char* argv[]) {
             // R[z] : R[x] = (R[z] : R[y]) * 2 ** (l + 1)
             uint64_t sll = (uint64_t)(R[z]) << 32 | (uint64_t)(R[y]);
             sll = sll << (l + 1);
-            if (x != 0)
-              R[x] = sll;
-            if (z != 0)
-              R[z] = sll >> 32;
+            if (x != 0) R[x] = sll;
+            if (z != 0) R[z] = sll >> 32;
 
             // ZN <- R[z] : R[x] = 0
             updateSR(&R[31], "ZN", R[z] == 0 && R[x] == 0);
             // CY <- R[z] != 0
             updateSR(&R[31], "CY", R[z] != 0);
-
+            
             formatR(zName, z);
             formatR(xName, x);
             formatR(yName, y);
@@ -261,15 +259,9 @@ int main (int argc, char* argv[]) {
           case 0b010:
             // muls - operação de multiplicação com registradores (com sinal)
             // R[l] : R[z] = R[x] * R[y]
-            int64_t muls = (uint64_t)(R[x]) * (uint64_t)(R[y]);
-            muls = (muls << 32) >> 32;
-            if (z != 0)
-              R[z] = muls;
-            if (l != 0)
-              R[l] = muls >> 32;
-            
-            
-            // if (R[l] != 0) R[l] = 0xFFFFFFFF;
+            int64_t muls = signalExtension64(R[x]) * signalExtension64(R[y]);
+            if (z != 0) R[z] = muls;
+            if (l != 0) R[l] = muls >> 32;
             
             // ZN <- R[l] : R[z] = 0
             updateSR(&R[31], "ZN", R[l] == 0 && R[z] == 0);
@@ -291,12 +283,10 @@ int main (int argc, char* argv[]) {
           case 0b011:
             // sla - operação de deslocamento para esquerda (com sinal)
             // R[z] : R[x] = (R[z] : R[y]) * 2 ** (l + 1)
-            int64_t sla = (uint64_t)(R[z]) << 32 | (uint64_t)(R[y]);
+            int64_t sla = signalExtension64(R[z]) << 32 | signalExtension64(R[y]);
             sla = sla << (l + 1);
-            if (x != 0)
-              R[x] = sla;
-            if (z != 0)
-              R[z] = sla >> 32;
+            if (x != 0) R[x] = sla;
+            if (z != 0) R[z] = sla >> 32;
 
             // ZN <- R[z] : R[x] = 0
             updateSR(&R[31], "ZN", R[z] == 0 && R[x] == 0);
@@ -315,21 +305,17 @@ int main (int argc, char* argv[]) {
             break;
           case 0b100:
             // div - operação de divisão com registradores (sem sinal)
-            if (R[y] != 0) {
+            if (R[y] == 0) updateSR(&R[31], "ZD", R[y] == 0);
+            else {
               // R[l] = R[x] mod R[y]
-              if (l != 0)
-                R[l] = R[x] % R[y];
+              if (l != 0) R[l] = R[x] % R[y];
               // R[z] = R[x] ÷ R[y]
-              if (z != 0)
-                R[z] = R[x] / R[y];
+              if (z != 0) R[z] = R[x] / R[y];
+              // ZN <- R[z] = 0
+              updateSR(&R[31], "ZN", R[z] == 0);
+              // CY <- R[l] != 0
+              updateSR(&R[31], "CY", R[l] != 0);
             }
-
-            // ZN <- R[z] = 0
-            updateSR(&R[31], "ZN", R[z] == 0);
-            // ZD <- R[y] = 0
-            updateSR(&R[31], "ZD", R[y] == 0);
-            // CY <- R[l] != 0
-            updateSR(&R[31], "CY", R[l] != 0);
 
             formatR(zName, z);
             formatR(xName, x);
@@ -350,10 +336,8 @@ int main (int argc, char* argv[]) {
             // R[z] : R[x] = (R[z] : R[y]) ÷ 2 ** (l + 1)
             uint64_t srl = (uint64_t)(R[z]) << 32 | (uint64_t)(R[y]);
             srl = srl >> (l + 1);
-            if (x != 0)
-              R[x] = srl;
-            if (z != 0)
-              R[z] = srl >> 32;
+            if (x != 0) R[x] = srl;
+            if (z != 0) R[z] = srl >> 32;
 
             // ZN <- R[z] : R[x] = 0
             updateSR(&R[31], "ZN", R[z] == 0 && R[x] == 0);
@@ -372,27 +356,22 @@ int main (int argc, char* argv[]) {
             break;
           case 0b110:
             // divs - operação de divisão com registradores (com sinal)
-            int32_t divs;
-            int32_t mods;
-            if (R[y] != 0) {
+            int32_t divs = 0;
+            int32_t mods = 0;
+            if (R[y] == 0) updateSR(&R[31], "ZD", R[y] == 0);
+            else {
               // R[l] = R[x] mod R[y]
               mods = (int32_t)(R[x]) % (int32_t)(R[y]);
               // R[z] = R[x] ÷ R[y]
               divs = (int32_t)(R[x]) / (int32_t)(R[y]);
-              
-              if (l != 0)
-                R[l] = mods;
-              if (z != 0)
-                R[z] = divs;
-            }
 
-        
-            // ZN <- R[z] = 0
-            updateSR(&R[31], "ZN", R[z] == 0);
-            // ZD <- R[y] = 0
-            updateSR(&R[31], "ZD", R[y] == 0);
-            // OV <- R[l] != 0
-            updateSR(&R[31], "OV", R[l] != 0);
+              if (l != 0) R[l] = mods;
+              if (z != 0) R[z] = divs;
+              // OV <- R[l] != 0
+              updateSR(&R[31], "OV", R[l] != 0);
+              // ZN <- R[z] = 0
+              updateSR(&R[31], "ZN", R[z] == 0);
+            }
 
             formatR(zName, z);
             formatR(xName, x);
@@ -409,15 +388,13 @@ int main (int argc, char* argv[]) {
           case 0b111:
             // sra - operação de deslocamento para direita (com sinal)
             // R[z] : R[x] = (R[z] : R[y]) ÷ 2 ** (l + 1)
-            int64_t sra = (uint64_t)(R[z]) << 32 | (uint64_t)(R[y]);
+            int64_t sra = signalExtension64(R[z]) << 32 | signalExtension64(R[y]);
             sra = (sra >> (l + 1));
-            if (x != 0)
-              R[x] = sra;
-            if (z != 0)
-              R[z] = sra >> 32;
+            if (x != 0) R[x] = sra;
+            if (z != 0) R[z] = sra >> 32;
 
             // ZN <- R[z] : R[x] = 0
-            updateSR(&R[31], "ZN", R[z] == 0 && R[y] == 0);
+            updateSR(&R[31], "ZN", R[z] == 0 && R[x] == 0);
             // OV <- R[z] != 0
             updateSR(&R[31], "OV", R[z] != 0);
 
@@ -440,14 +417,14 @@ int main (int argc, char* argv[]) {
         // cmp - operação de comparação
         uTypeInstructionXY(R, &x, &y);
 
-        uint64_t cmp = (uint64_t)R[x] - (uint64_t)R[y];
+        int64_t cmp = (int64_t)R[x] - (int64_t)R[y];
 
         // ZN <- CMP = 0
         updateSR(&R[31], "ZN", cmp == 0);
         // SN <- CMP bit 31 = 1
         updateSR(&R[31], "SN", ((cmp >> 31) & 0b1) == 0b1);
         // OV <- (R[x] bit 31 != R[y] bit 31) && (CMP bit 31 != R[x] bit 31) 
-        updateSR(&R[31], "OV", ((R[x] >> 31) & 0b1) != (((R[y] >> 31) & 0b1)) && ((cmp >> 31) & 0b1) != ((R[z] >> 31) & 0b1));
+        updateSR(&R[31], "OV", ((R[x] >> 31) & 0b1) != ((R[y] >> 31) & 0b1) && ((cmp >> 31) & 0b1) != ((R[x] >> 31) & 0b1));
         // CY <- CMP bit 32 = 1
         updateSR(&R[31], "CY", ((cmp >> 32) & 0b1) == 0b1);
 
@@ -461,8 +438,7 @@ int main (int argc, char* argv[]) {
         // and
         uTypeInstructionZXY(R, &z, &x, &y);
         
-        if (z != 0)
-          R[z] = R[x] & R[y];
+        if (z != 0) R[z] = R[x] & R[y];
 
         // ZN <- R[z] = 0
         updateSR(&R[31], "ZN", R[z] == 0);
@@ -483,8 +459,7 @@ int main (int argc, char* argv[]) {
         // or
         uTypeInstructionZXY(R, &z, &x, &y);
 
-        if (z != 0)
-          R[z] = R[x] | R[y];
+        if (z != 0) R[z] = R[x] | R[y];
 
         // ZN <- R[z] = 0
         updateSR(&R[31], "ZN", R[z] == 0);
@@ -505,8 +480,7 @@ int main (int argc, char* argv[]) {
         // not
         uTypeInstructionZX(R, &z, &x);
 
-        if (z != 0)
-          R[z] = ~R[x];
+        if (z != 0) R[z] = ~R[x];
 
         // ZN <- R[z] = 0
         updateSR(&R[31], "ZN", R[z] == 0);
@@ -525,8 +499,7 @@ int main (int argc, char* argv[]) {
         // xor
         uTypeInstructionZXY(R, &z, &x, &y);
 
-        if (z != 0)
-          R[z] = R[x] ^ R[y];
+        if(z != 0) R[z] = R[x] ^ R[y];
 
         // ZN <- R[z] = 0
         updateSR(&R[31], "ZN", R[z] == 0);
@@ -548,8 +521,8 @@ int main (int argc, char* argv[]) {
         fTypeInstructionZXI(R, &z, &x, &i);
 
         if (z != 0) {
-          result = (int64_t)R[x] + (int64_t)i;
-          R[z] = R[x] + i;
+          result = (uint64_t)(R[x]) + (uint64_t)(i);
+          R[z] = result;
         }
 
         // ZN <- R[z] = 0
@@ -559,7 +532,7 @@ int main (int argc, char* argv[]) {
         // OV <- (R[x] bit 31 == i bit 15) && (R[z] bit 31 != R[x] bit 31) 
         updateSR(&R[31], "OV", ((R[x] >> 31) & 0b1) == ((i >> 15) & 0b1) && ((R[z] >> 31) & 0b1) != ((R[x] >> 31) & 0b1));
         // CY <- R[z] bit 32 = 1
-        updateSR(&R[31], "CY", ((uresult >> 32) & 0b1) == 1);
+        updateSR(&R[31], "CY", ((result >> 32) & 0b1) == 1);
 
         formatR(zName, z);
         formatR(xName, x);
@@ -574,10 +547,10 @@ int main (int argc, char* argv[]) {
         fTypeInstructionZXI(R, &z, &x, &i);
 
         if (z != 0) {
-          result = (int64_t)R[x] - (int64_t)i;
-          R[z] = R[x] - i;
+          result = (uint64_t)(R[x]) - (uint64_t)(i);
+          R[z] = result;
         }
-
+        
         // ZN <- R[z] = 0
         updateSR(&R[31], "ZN", R[z] == 0);
         // SN <- R[z] bit 31 = 1
@@ -586,7 +559,6 @@ int main (int argc, char* argv[]) {
         updateSR(&R[31], "OV", ((R[x] >> 31) & 0b1) != ((i >> 15) & 0b1) && ((R[z] >> 31) & 0b1) != ((R[x] >> 31) & 0b1));
         // CY <- R[z] bit 32 = 1
         updateSR(&R[31], "CY", ((result >> 32) & 0b1) == 1);
-
 
         formatR(zName, z);
         formatR(xName, x);
@@ -601,10 +573,10 @@ int main (int argc, char* argv[]) {
         fTypeInstructionZXI(R, &z, &x, &i);
 
         if (z != 0) {
-          R[z] = R[x] * i;
-          result = ((int64_t)(R[z]) << 32) >> 32;
+          result = signalExtension64(R[x]) * signalExtension64(i);
+          R[z] = result;
         }
-
+        
         // ZN <- R[z] = 0
         updateSR(&R[31], "ZN", R[z] == 0);
         // OV <- R[z] bits 63 ao 32 != 0
@@ -622,15 +594,14 @@ int main (int argc, char* argv[]) {
         // divi - operação de divisão imediata
         fTypeInstructionZXI(R, &z, &x, &i);
 
-        if (i != 0 && z != 0)
-          R[z] = (int32_t)(R[x]) / (int32_t)(i);
-
-        // OV <- 0
+        if (i == 0) updateSR(&R[31], "ZD", i == 0);
+        else {
+          if (z != 0) R[z] = (int32_t)R[x] / (int32_t)i;
+          
           R[31] = R[31] & (~0x00000008);
-        // ZN <- R[z] = 0
-        updateSR(&R[31], "ZN", R[z] == 0);
-        // ZD <- i = 0
-        updateSR(&R[31], "ZD", i == 0);
+          updateSR(&R[31], "ZN", R[z] == 0);
+        }
+        
 
         formatR(zName, z);
         formatR(xName, x);
@@ -644,15 +615,13 @@ int main (int argc, char* argv[]) {
         // modi - operação de resto imediato
         fTypeInstructionZXI(R, &z, &x, &i);
 
-        if (z != 0 && i != 0)
-          R[z] = (int32_t)(R[x]) % (int32_t)(i);
-
-        // OV <- 0
-        R[31] = R[31] & (~0x00000008);
-        // ZN <- R[z] = 0
-        updateSR(&R[31], "ZN", R[z] == 0);
-        // ZD <- i = 0
-        updateSR(&R[31], "ZD", i == 0);
+        if (i == 0) updateSR(&R[31], "ZD", i == 0);
+        else {
+          if (z != 0) R[z] = (int32_t)(R[x]) % (int32_t)(i);
+          
+          R[31] = R[31] & (~0x00000008);
+          updateSR(&R[31], "ZN", R[z] == 0);
+        }
 
         formatR(zName, z);
         formatR(xName, x);
@@ -666,7 +635,7 @@ int main (int argc, char* argv[]) {
         // cmpi - comparação imediata
         fTypeInstructionXI(R, &x, &i);
         
-        int64_t cmpi = (int64_t)R[x] - (int64_t)i;
+        int64_t cmpi = signalExtension64(R[x]) - signalExtension64(i);
 
         // ZN <- CMPI = 0
         updateSR(&R[31], "ZN", cmpi == 0);
@@ -683,11 +652,14 @@ int main (int argc, char* argv[]) {
         fprintf(output, "0x%08X:\t%-25s\tSR=0x%08X\n", R[29], instrucao, R[31]);
         break;
       case 0b011000:
-        // l8 - leitura de 16 bits na memória
+        // l8 - leitura de 8 bits na memória
         fTypeInstructionZXI(R, &z, &x, &i);
         
-        R[z] = MEM32[(R[x] + i) >> 2];
-        R[z] = R[z] & 0x000000FF;
+        if (z != 0) {
+          R[z] = MEM32[(R[x] + i) >> 2];
+          R[z] = R[z] >> (24 - ((R[x] + i) % 4) * 8);
+          R[z] = R[z] & 0x000000FF;
+        }
 
         formatR(zName, z);
         formatR(xName, x);
@@ -695,14 +667,17 @@ int main (int argc, char* argv[]) {
         sprintf(instrucao, "l8 %s,[%s%s%i]", zName, xName, (i >= 0) ? "+" : "", i);
         toUpperCase(zName);
         toUpperCase(xName);
-        fprintf(output, "0x%08X:\t%-25s\t%s=MEM[0x%08X]=0x%02X\n", R[29] << 2, instrucao, zName, R[x] + i, R[z]);
+        fprintf(output, "0x%08X:\t%-25s\t%s=MEM[0x%08X]=0x%02X\n", R[29], instrucao, zName, R[x] + i, R[z]);
         break;
       case 0b011001:
         // l16 - leitura de 16 bits na memória
         fTypeInstructionZXI(R, &z, &x, &i);
 
-        R[z] = MEM32[(R[x] + i) >> 1];
-        R[z] = R[z] & 0x0000FFFF;
+        if (z != 0) {
+          R[z] = MEM32[(R[x] + i) >> 1];
+          R[z] = R[z] >> (16 - ((R[x] + i) % 4) * 16);
+          R[z] = R[z] & 0x0000FFFF;
+        }
 
         formatR(zName, z);
         formatR(xName, x);
@@ -716,7 +691,8 @@ int main (int argc, char* argv[]) {
         // l32 - leitura de 32 bits na memória
         fTypeInstructionZXI(R, &z, &x, &i);
 
-        R[z] = MEM32[R[x] + i];
+        if (z != 0)
+          R[z] = MEM32[R[x] + i];
 
         formatR(zName, z);
         formatR(xName, x);
@@ -1121,6 +1097,12 @@ int main (int argc, char* argv[]) {
   return 0;
 }
 
+int64_t signalExtension64 (int number) {
+  if ((number >> 31) == 0b1)
+    return (int64_t) number | 0xFFFFFFFF00000000;
+  return (int64_t) number;
+}
+
 void uTypeInstructionZXYVW (uint32_t* R, uint8_t* z, uint8_t* x, uint8_t* y, uint8_t* v, uint8_t* w) {
   R[29] = R[29] << 2;
   
@@ -1178,7 +1160,7 @@ void fTypeInstructionXI (uint32_t* R, uint8_t* x, int32_t* i) {
 
   *x = (R[28] & 0x001F0000) >> 16;
   *i = (R[28] & 0x0000FFFF);
-  // extensão de sinal caso i seja negativo
+  
   if ((*i >> 15) == 0b1)
     *i += 0xFFFF0000;
 }
@@ -1189,7 +1171,7 @@ void fTypeInstructionPCXI (uint32_t* pcAntigo, uint32_t* R, uint8_t* x, int32_t*
 
   *x = (R[28] & 0x001F0000) >> 16;
   *i = (R[28] & 0x0000FFFF);
-  // extensão de sinal caso i seja negativo
+
   if ((*i >> 15) == 0b1)
     *i += 0xFFFF0000;
 }
@@ -1204,27 +1186,27 @@ void sTypeInstruction (uint32_t* pcAntigo, uint32_t* R, int32_t* i) {
     *i += 0xFC000000;
 }
 
-uint8_t compare2 (uint8_t v1, uint8_t v2) {
+int compare2 (uint8_t v1, uint8_t v2) {
   if (v1 != 0 && v2 != 0) return 1;
   return 0;
 }
 
-uint8_t compare3 (uint8_t v1, uint8_t v2, uint8_t v3) {
+int compare3 (uint8_t v1, uint8_t v2, uint8_t v3) {
   if (v1 != 0 && v2 != 0 && v3 != 0) return 1;
   return 0;
 }
 
-uint8_t compare4 (uint8_t v1, uint8_t v2, uint8_t v3, uint8_t v4) {
+int compare4 (uint8_t v1, uint8_t v2, uint8_t v3, uint8_t v4) {
   if (v1 != 0 && v2 != 0 && v3 != 0 && v4 != 0) return 1;
   return 0;
 }
 
-uint8_t compare5 (uint8_t v1, uint8_t v2, uint8_t v3, uint8_t v4, uint8_t v5) {
+int compare5 (uint8_t v1, uint8_t v2, uint8_t v3, uint8_t v4, uint8_t v5) {
   if (v1 != 0 && v2 != 0 && v3 != 0 && v4 != 0 && v5 != 0) return 1;
   return 0;
 }
 
-void updateSR (uint32_t* SR, char field[], uint8_t condition) {
+void updateSR (uint32_t* SR, char field[], int condition) {
 
     if (strcmp(field, "ZN") == 0) {
       if (condition == 1)
