@@ -311,6 +311,9 @@ int main (int argc, char* argv[]) {
               if (l != 0) R[l] = R[x] % R[y];
               // R[z] = R[x] ÷ R[y]
               if (z != 0) R[z] = R[x] / R[y];
+
+	      // ZD <- R[y] = 0
+	      updateSR(&R[31], "ZD", R[y] == 0);
               // ZN <- R[z] = 0
               updateSR(&R[31], "ZN", R[z] == 0);
               // CY <- R[l] != 0
@@ -367,6 +370,9 @@ int main (int argc, char* argv[]) {
 
               if (l != 0) R[l] = mods;
               if (z != 0) R[z] = divs;
+
+	      // ZD <- R[y] = 0
+	      updateSR(&R[31], "ZD", R[y] == 0);
               // OV <- R[l] != 0
               updateSR(&R[31], "OV", R[l] != 0);
               // ZN <- R[z] = 0
@@ -597,8 +603,12 @@ int main (int argc, char* argv[]) {
         if (i == 0) updateSR(&R[31], "ZD", i == 0);
         else {
           if (z != 0) R[z] = (int32_t)R[x] / (int32_t)i;
-          
+
+	  // ZD <- R[y] = 0
+	  updateSR(&R[31], "ZD", R[y] == 0);
+	  // OV <- 0
           R[31] = R[31] & (~0x00000008);
+	  // ZN <- R[z] = 0
           updateSR(&R[31], "ZN", R[z] == 0);
         }
         
