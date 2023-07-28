@@ -628,7 +628,8 @@ int main (int argc, char* argv[]) {
         if (i == 0) updateSR(&R[31], "ZD", i == 0);
         else {
           if (z != 0) R[z] = (int32_t)(R[x]) % (int32_t)(i);
-          
+		
+          updateSR(&R[31], "ZD", i == 0);
           R[31] = R[31] & (~0x00000008);
           updateSR(&R[31], "ZN", R[z] == 0);
         }
