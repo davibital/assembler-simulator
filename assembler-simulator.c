@@ -1,5 +1,5 @@
-// gcc -Wall -O3 assembly-simulator.c -o assembly-simulator
-// ./assembly-simulator entrada saída
+// gcc -Wall -O3 assembler-simulator.c -o assembler-simulator
+// ./assembler-simulator entrada saída
 #include <stdint.h>
 #include <stdlib.h>
 #include <stdio.h>
