@@ -26,14 +26,6 @@ void fTypeInstructionPCXI (uint32_t* pcAntigo, uint32_t* R, uint8_t* x, int32_t*
 
 void sTypeInstruction (uint32_t* pcAntigo, uint32_t* R, int32_t* i);
 
-int compare2 (uint8_t v1, uint8_t v2);
-
-int compare3 (uint8_t v1, uint8_t v2, uint8_t v3);
-
-int compare4 (uint8_t v1, uint8_t v2, uint8_t v3, uint8_t v4);
-
-int compare5 (uint8_t v1, uint8_t v2, uint8_t v3, uint8_t v4, uint8_t v5);
-
 void updateSR (uint32_t* SR, char field[], int condition);
 
 void formatR (char RName[5], uint8_t R);
@@ -93,11 +85,12 @@ int main (int argc, char* argv[]) {
     */
 
     // Operandos da instrução
-    uint8_t z = 0, x = 0, y = 0, l = 0, v = 0, w = 0;
-    char zName[5], xName[5], yName[5], lName[5], vName[5], wName[5];
-    char vHex[11], wHex[11], xHex[11], yHex[11], zHex[11];
+    uint8_t z = 0, x = 0, y = 0, l = 0, v = 0, w = 0, temp[5];
+    char RName[5], zName[5], xName[5], yName[5], lName[5];
     int32_t i = 0, xxyl = 0;
     uint32_t pcAntigo = 0, spAntigo = 0, xyl = 0;
+    char hexadecimals[55] = {0};
+    char registers[20] = {0};
 
     // uresult e result - variável de 64 bits para verificar carry e overflow em casos de operações matemáticas básicas (+, -, *)
     uint64_t uresult = 0;
@@ -312,8 +305,8 @@ int main (int argc, char* argv[]) {
               // R[z] = R[x] ÷ R[y]
               if (z != 0) R[z] = R[x] / R[y];
 
-	      // ZD <- R[y] = 0
-	      updateSR(&R[31], "ZD", R[y] == 0);
+              // ZD <- R[y] = 0
+              updateSR(&R[31], "ZD", R[y] == 0);
               // ZN <- R[z] = 0
               updateSR(&R[31], "ZN", R[z] == 0);
               // CY <- R[l] != 0
@@ -371,8 +364,8 @@ int main (int argc, char* argv[]) {
               if (l != 0) R[l] = mods;
               if (z != 0) R[z] = divs;
 
-	      // ZD <- R[y] = 0
-	      updateSR(&R[31], "ZD", R[y] == 0);
+              // ZD <- R[y] = 0
+              updateSR(&R[31], "ZD", R[y] == 0);
               // OV <- R[l] != 0
               updateSR(&R[31], "OV", R[l] != 0);
               // ZN <- R[z] = 0
@@ -628,8 +621,8 @@ int main (int argc, char* argv[]) {
         if (i == 0) updateSR(&R[31], "ZD", i == 0);
         else {
           if (z != 0) R[z] = (int32_t)(R[x]) % (int32_t)(i);
-		
-          updateSR(&R[31], "ZD", i == 0);
+
+	  updateSR(&R[31], "ZD", i == 0);          
           R[31] = R[31] & (~0x00000008);
           updateSR(&R[31], "ZN", R[z] == 0);
         }
@@ -959,138 +952,94 @@ int main (int argc, char* argv[]) {
         // i = v, w, x, y, z, o i receberá o valor da primeira variável que for diferente de 0
         uTypeInstructionZXYVW(R, &z, &x, &y, &v, &w);
         spAntigo = R[30];
+        temp[0] = v;
+        temp[1] = w;
+        temp[2] = x;
+        temp[3] = y;
+        temp[4] = z;
 
-        if (v != 0) {
-          // MEM[SP] = R[i]
-          MEM32[R[30] >> 2] = R[v];
-          // SP = SP - 4;
-          R[30] -= 4;
-
-          if (w != 0) {
-            // MEM[SP] = R[i]
-            MEM32[R[30] >> 2] = R[w];
-            // SP = SP - 4;
-            R[30] -= 4;
-
-            if (x != 0) {
-              // MEM[SP] = R[i]
-              MEM32[R[30] >> 2] = R[x];
-              // SP = SP - 4;
-              R[30] -= 4;
-              
-              if (y != 0) {
-                // MEM[SP] = R[i]
-                MEM32[R[30] >> 2] = R[y];
-                // SP = SP - 4;
-                R[30] -= 4;
-                
-                if (z != 0) {
-                  // MEM[SP] = R[i]
-                  MEM32[R[30] >> 2] = R[z];
-                  // SP = SP - 4;
-                  R[30] -= 4;
-                }
-              }
-            }
-          }
-        }
-
-        formatR(vName, v);
-        formatR(wName, w);
-        formatR(xName, x);
-        formatR(yName, y);
-        formatR(zName, z);
-
-        if (v == 0) {
-          sprintf(instrucao, "push -");
-          fprintf(output, "0x%08X:\t%-25s\tMEM[0x%08X]{}={}\n", R[29], instrucao, spAntigo);
-        }
+        if (temp[0] == 0) sprintf(instrucao, "push -");
         else {
-          sprintf(instrucao, "push %s%s%s%s%s%s%s%s%s", (v != 0) ? vName : "", compare2(v, w) ? "," : "", compare2(v, w) ? wName : "", compare3(v, w, x) ? "," : "", compare3(v, w, x) ? xName : "", compare4(v, w, x, y) ? "," : "", compare4(v, w, x, y) ? yName : "", compare5(v, w, x, y, z) ? "," : "", compare5(v, w, x, y, z) ? zName : "");
+          MEM32[R[30] >> 2] = R[v];
+          R[30] -= 4;
+          formatR(RName, v);
+          sprintf(instrucao, "push %s", RName);
 
-          toUpperCase(vName);
-          toUpperCase(wName);
-          toUpperCase(xName);
-          toUpperCase(yName);
-          toUpperCase(zName);
+          toUpperCase(RName);
+          sprintf(registers, "%s", RName);
+          sprintf(hexadecimals, "0x%08X", R[v]);
 
-          sprintf(vHex, "0x%08X", R[v]);
-          sprintf(wHex, "0x%08X", R[w]);
-          sprintf(xHex, "0x%08X", R[x]);
-          sprintf(yHex, "0x%08X", R[y]);
-          sprintf(zHex, "0x%08X", R[z]);
+          for (int index = 1; index < 5; index++)
+            if (temp[index] == 0) break;
+            else {
+              uint8_t r = temp[index];
+              MEM32[R[30] >> 2] = R[r];
+              R[30] -= 4;
 
-          fprintf(output, "0x%08X:\t%-25s\tMEM[0x%08X]{%s%s%s%s%s%s%s%s%s}={%s%s%s%s%s%s%s%s%s}\n", R[29], instrucao, spAntigo, (v != 0) ? vHex : "", compare2(v, w) ? "," : "", compare2(v, w) ? wHex : "", compare3(v, w, x) ? "," : "", compare3(v, w, x) ? xHex : "", compare4(v, w, x, y) ? "," : "", compare4(v, w, x, y) ? yHex : "", compare5(v, w, x, y, z) ? "," : "", compare5(v, w, x, y, z) ? zHex : "", (v != 0) ? vName : "", compare2(v, w) ? "," : "", compare2(v, w) ? wName : "", compare3(v, w, x) ? "," : "", compare3(v, w, x) ? xName : "", compare4(v, w, x, y) ? "," : "", compare4(v, w, x, y) ? yName : "", compare5(v, w, x, y, z) ? "," : "", compare5(v, w, x, y, z) ? zName : "");
+              char hex[11];
+              formatR(RName, r);
+
+              strcat(instrucao, ",");
+              strcat(instrucao, RName);
+
+              toUpperCase(RName);
+              
+              strcat(registers, ",");
+              strcat(registers, RName);
+              sprintf(hex, "0x%08X", R[r]);
+              strcat(hexadecimals, ",");
+              strcat(hexadecimals, hex);
+            }
         }
+
+        fprintf(output, "0x%08X:\t%-25s\tMEM[0x%08X]{%s}={%s}\n", R[29], instrucao, spAntigo, hexadecimals, registers);
         break;
       case 0b001011:
         // pop - operação de desempilhamento
         // i = v, w, x, y, z, o i receberá o valor da primeira variável que for diferente de 0
         uTypeInstructionZXYVW(R, &z, &x, &y, &v, &w);
         spAntigo = R[30];
+        temp[0] = v;
+        temp[1] = w;
+        temp[2] = x;
+        temp[3] = y;
+        temp[4] = z;
 
-        if (v != 0) {
-          // SP = SP + 4
-          R[30] += 4;
-          // R[i] = MEM[SP]
-          R[v] = MEM32[R[30] >> 2];
-          
-          if (w != 0) {
-            // SP = SP + 4
-            R[30] += 4;
-            // R[i] = MEM[SP]
-            R[w] = MEM32[R[30] >> 2];
-            
-            if (x != 0) {
-              // SP = SP + 4
-              R[30] += 4;
-              // R[i] = MEM[SP]
-              R[x] = MEM32[R[30] >> 2];
-              
-              if (y != 0) {
-                // SP = SP + 4
-                R[30] += 4;
-                // R[i] = MEM[SP]
-                R[y] = MEM32[R[30] >> 2];
-                
-                if (z != 0) {
-                  // SP = SP + 4
-                  R[30] += 4;
-                  // R[i] = MEM[SP]
-                  R[z] = MEM32[R[30] >> 2];
-                }
-              }
-            }
-          }
-        }
-
-        formatR(vName, v);
-        formatR(wName, w);
-        formatR(xName, x);
-        formatR(yName, y);
-        formatR(zName, z);
-
-        if (v == 0) {
-          sprintf(instrucao, "pop -");
-          fprintf(output, "0x%08X:\t%-25s\t{}=MEM[0x%08X]{}\n", R[29], instrucao, spAntigo);
-        }
+        if (temp[0] == 0) sprintf(instrucao, "pop -");
         else {
-          sprintf(instrucao, "pop %s%s%s%s%s%s%s%s%s", (v != 0) ? vName : "", compare2(v, w) ? "," : "", compare2(v, w) ? wName : "", compare3(v, w, x) ? "," : "", compare3(v, w, x) ? xName : "", compare4(v, w, x, y) ? "," : "", compare4(v, w, x, y) ? yName : "", compare5(v, w, x, y, z) ? "," : "", compare5(v, w, x, y, z) ? zName : "");
+          R[30] += 4;
+          R[v] = MEM32[R[30] >> 2];
+          formatR(RName, v);
+          sprintf(instrucao, "pop %s", RName);
 
-          toUpperCase(vName);
-          toUpperCase(wName);
-          toUpperCase(xName);
-          toUpperCase(yName);
-          toUpperCase(zName);
+          toUpperCase(RName);
+          sprintf(registers, "%s", RName);
+          sprintf(hexadecimals, "0x%08X", R[v]);
 
-          sprintf(vHex, "0x%08X", R[v]);
-          sprintf(wHex, "0x%08X", R[w]);
-          sprintf(xHex, "0x%08X", R[x]);
-          sprintf(yHex, "0x%08X", R[y]);
-          sprintf(zHex, "0x%08X", R[z]);
+          for (int index = 1; index < 5; index++)
+            if (temp[index] == 0) break;
+            else {
+              uint8_t r = temp[index];
+              R[30] += 4;
+              R[r] = MEM32[R[30] >> 2];
 
-          fprintf(output, "0x%08X:\t%-25s\t{%s%s%s%s%s%s%s%s%s}=MEM[0x%08X]{%s%s%s%s%s%s%s%s%s}\n", R[29], instrucao, (v != 0) ? vName : "", compare2(v, w) ? "," : "", compare2(v, w) ? wName : "", compare3(v, w, x) ? "," : "", compare3(v, w, x) ? xName : "", compare4(v, w, x, y) ? "," : "", compare4(v, w, x, y) ? yName : "", compare5(v, w, x, y, z) ? "," : "", compare5(v, w, x, y, z) ? zName : "", spAntigo, (v != 0) ? vHex : "", compare2(v, w) ? "," : "", compare2(v, w) ? wHex : "", compare3(v, w, x) ? "," : "", compare3(v, w, x) ? xHex : "", compare4(v, w, x, y) ? "," : "", compare4(v, w, x, y) ? yHex : "", compare5(v, w, x, y, z) ? "," : "", compare5(v, w, x, y, z) ? zHex : "");
+              char hex[11];
+              formatR(RName, r);
+
+              strcat(instrucao, ",");
+              strcat(instrucao, RName);
+
+              toUpperCase(RName);
+              
+              strcat(registers, ",");
+              strcat(registers, RName);
+              sprintf(hex, "0x%08X", R[r]);
+              strcat(hexadecimals, ",");
+              strcat(hexadecimals, hex);
+            }
         }
+
+        fprintf(output, "0x%08X:\t%-25s\t{%s}=MEM[0x%08X]{%s}\n", R[29], instrucao, registers, spAntigo, hexadecimals);
         break;
       default:
         fprintf(output, "[INVALID INSTRUCTION @ 0x%08X]\n", R[29]);
@@ -1197,24 +1146,42 @@ void sTypeInstruction (uint32_t* pcAntigo, uint32_t* R, int32_t* i) {
     *i += 0xFC000000;
 }
 
-int compare2 (uint8_t v1, uint8_t v2) {
-  if (v1 != 0 && v2 != 0) return 1;
-  return 0;
-}
+void popInstruction (uint32_t* R, uint32_t* MEM32, char instrucao[], uint8_t v, uint8_t w, uint8_t x, uint8_t y, uint8_t z) {
+  uint8_t temp[] = {v, w, x, y, z};
+  char RName[5];
 
-int compare3 (uint8_t v1, uint8_t v2, uint8_t v3) {
-  if (v1 != 0 && v2 != 0 && v3 != 0) return 1;
-  return 0;
-}
+  if (temp[0] == 0) sprintf(instrucao, "pop -");
+  else {
+    R[30] += 4;
+    R[v] = MEM32[R[30] >> 2];
 
-int compare4 (uint8_t v1, uint8_t v2, uint8_t v3, uint8_t v4) {
-  if (v1 != 0 && v2 != 0 && v3 != 0 && v4 != 0) return 1;
-  return 0;
-}
+    char hexadecimals[54];
+    char registers[20];
+    formatR(RName, R[0]);
+    sprintf(instrucao, "pop %s", RName);
 
-int compare5 (uint8_t v1, uint8_t v2, uint8_t v3, uint8_t v4, uint8_t v5) {
-  if (v1 != 0 && v2 != 0 && v3 != 0 && v4 != 0 && v5 != 0) return 1;
-  return 0;
+    toUpperCase(RName);
+    sprintf(registers, "%s", RName);
+    sprintf(hexadecimals, "0x%08X", R[0]);
+
+  for (int i = 1; i < 5; i++)
+    if (temp[i] == 0) break;
+    else {
+      char hex[11];
+      formatR(RName, R[i]);
+
+      strcat(instrucao, ",");
+      strcat(instrucao, RName);
+
+      toUpperCase(RName);
+      
+      strcat(registers, ",");
+      strcat(registers, RName);
+      sprintf(hex, "0x%08X", R[i]);
+      strcat(hexadecimals, ",");
+      strcat(hexadecimals, hex);
+    }
+  }
 }
 
 void updateSR (uint32_t* SR, char field[], int condition) {
