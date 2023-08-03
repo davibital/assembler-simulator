@@ -1,5 +1,5 @@
 // gcc -Wall -O3 assembler-simulator.c -o assembler-simulator
-// ./assembler-simulator entrada saída
+// ./assembler-simulator input output
 #include <stdint.h>
 #include <stdlib.h>
 #include <stdio.h>
@@ -10,23 +10,23 @@ void getFileInstructions(FILE* input, uint32_t* MEM);
 
 int64_t signalExtension64 (int number);
 
-void uTypeInstructionZXYVW (uint32_t* R, uint8_t* z, uint8_t* x, uint8_t* y, uint8_t* v, uint8_t* w);
+void UTypeInstructionZXYVW (uint32_t* R, uint8_t* z, uint8_t* x, uint8_t* y, uint8_t* v, uint8_t* w);
 
-void uTypeInstructionZXYL (uint32_t* R, uint8_t* z, uint8_t* x, uint8_t* y, uint8_t* l);
+void UTypeInstructionZXYL (uint32_t* R, uint8_t* z, uint8_t* x, uint8_t* y, uint8_t* l);
 
-void uTypeInstructionZXY (uint32_t* R, uint8_t* z, uint8_t* x, uint8_t* y);
+void UTypeInstructionZXY (uint32_t* R, uint8_t* z, uint8_t* x, uint8_t* y);
 
-void uTypeInstructionZX (uint32_t* R, uint8_t* z, uint8_t* x);
+void UTypeInstructionZX (uint32_t* R, uint8_t* z, uint8_t* x);
 
-void uTypeInstructionXY (uint32_t* R, uint8_t* x, uint8_t* y);
+void UTypeInstructionXY (uint32_t* R, uint8_t* x, uint8_t* y);
 
-void fTypeInstructionZXI (uint32_t* R, uint8_t* z, uint8_t* x, int32_t* i);
+void FTypeInstructionZXI (uint32_t* R, uint8_t* z, uint8_t* x, int32_t* i);
 
-void fTypeInstructionXI (uint32_t* R, uint8_t* x, int32_t* i);
+void FTypeInstructionXI (uint32_t* R, uint8_t* x, int32_t* i);
 
-void fTypeInstructionPCXI (uint32_t* pcAntigo, uint32_t* R, uint8_t* x, int32_t* i);
+void FTypeInstructionPCXI (uint32_t* oldPC, uint32_t* R, uint8_t* x, int32_t* i);
 
-void sTypeInstruction (uint32_t* pcAntigo, uint32_t* R, int32_t* i);
+void STypeInstruction (uint32_t* oldPC, uint32_t* R, int32_t* i);
 
 void updateSR (uint32_t* SR, char field[], int condition);
 
@@ -38,177 +38,129 @@ int main (int argc, char* argv[]) {
   FILE* input = fopen(argv[1], "r");
   FILE* output = fopen(argv[2], "w");
 
-  // Criação dos registradores
-  // Lembrando: R0, R1, R2, ..., R25, CR, IPC, IR, PC, SP, SR
   uint32_t R[32] = {0};
 
-  // Criação da memória
   uint32_t* MEM32 = (uint32_t*)(calloc(8, 1024));
-
- // Variável que será armazenado os caracteres da linha do arquivo de entrada
+ 
   getFileInstructions(input, MEM32);
 
   fprintf(output, "[START OF SIMULATION]\n");
-  uint8_t execucao = 1;
+  uint8_t running = 1;
 
-  while (execucao) {
-    // Texto da instrução para ser printado no terminal
-    char instrucao[30] = {0};
+  while (running) {
+    
+    char instruction[30] = {0};
 
-    /*
-    Registrador de instrução (IR)
-    IR = R[28];
-    */
-
-    /*
-    Contador de programa (PC)
-    PC = R[29];
-    */
-
-    /* 
-    Ponteiro de pilha (SP)
-    SP = R[30];
-    */
-
-    /* 
-    Registrador de status (SR)
-    ZN -> 7° bit    0x00000040
-    ZD -> 6° bit    0x00000020
-    SN -> 5° bit    0x00000010
-    OV -> 4° bit    0x00000008
-    IV -> 3° bit    0x00000004
-    CY -> 1° bit    0x00000001
-    SR = R[31];
-    */
-
-    // Operandos da instrução
     uint8_t z = 0, x = 0, y = 0, l = 0, v = 0, w = 0, temp[5];
     char RName[5], zName[5], xName[5], yName[5], lName[5];
     int32_t i = 0, xxyl = 0;
-    uint32_t pcAntigo = 0, spAntigo = 0, xyl = 0;
+    uint32_t oldPC = 0, oldSP = 0, xyl = 0;
     char hexadecimals[55] = {0};
     char registers[20] = {0};
-
-    // uresult e result - variável de 64 bits para verificar carry e overflow em casos de operações matemáticas básicas (+, -, *)
+    
     uint64_t uresult = 0;
     int64_t result = 0;
 
-    // Instrução de 32 bits indexada pelo PC(R29) sendo armazenada no IR(R28)
     R[28] = MEM32[R[29]];
 
-    // O código da instrução são os 6 bits mais significativos (6 primeiros dígitos)
-    uint8_t codigoInstrucao = (R[28] & 0xFC000000) >> 26;
+    uint8_t operationCode = (R[28] & 0xFC000000) >> 26;
 
-    switch (codigoInstrucao) {
+    switch (operationCode) {
       case 0b000000:
-        // mov - atribuição imediata (sem sinal)
+        // mov
         z = (R[28] & 0x03E00000) >> 21;
         xyl = R[28] & 0x001FFFFF;
 
         R[29] = R[29] << 2;
-
-        // R0 sempre será 0
+        
         if (z != 0)
           R[z] = xyl;
 
         formatR(zName, z);
 
-        sprintf(instrucao, "mov %s,%i", zName, xyl);
+        sprintf(instruction, "mov %s,%i", zName, xyl);
         toUpperCase(zName);
-        fprintf(output, "0x%08X:\t%-25s\t%s=0x%08X\n", R[29], instrucao, zName, R[z]);
+        fprintf(output, "0x%08X:\t%-25s\t%s=0x%08X\n", R[29], instruction, zName, R[z]);
         break;
       case 0b000001:
-        // movs - atribuição imediata (com sinal)
+        // movs
         z = (R[28] & 0x03E00000) >> 21;
         xxyl = R[28] & 0x001FFFFF;
 
         R[29] = R[29] << 2;
 
-        // extensão de sinal
         if ((xxyl & 0x00100000) >> 20 == 0b1)
           xxyl += 0xFFE00000;
 
-        // R0 sempre será 0
         if (z != 0)
           R[z] = xxyl;
 
         formatR(zName, z);
 
-        sprintf(instrucao, "movs %s,%i", zName, xxyl);
+        sprintf(instruction, "movs %s,%i", zName, xxyl);
         toUpperCase(zName);
-        fprintf(output, "0x%08X:\t%-25s\t%s=0x%08X\n", R[29], instrucao, zName, R[z]);
+        fprintf(output, "0x%08X:\t%-25s\t%s=0x%08X\n", R[29], instruction, zName, R[z]);
         break;
       case 0b000010:
-        // add - operação de adição com registradores
-        uTypeInstructionZXY(R, &z, &x, &y);
-
+        // add
+        UTypeInstructionZXY(R, &z, &x, &y);
+        
         if (z != 0) {
           uresult = (uint64_t)(R[x]) + (uint64_t)(R[y]);
           R[z] = R[x] + R[y];
         }
-
-        // ZN <- R[z] = 0
+        
         updateSR(&R[31], "ZN", R[z] == 0);
-        // SN <- R[z] bit 31 = 1
         updateSR(&R[31], "SN", ((R[z] >> 31) & 0b1) == 0b1);
-        // OV <- R[x] bit 31 = R[y] bit 31 && R[z] bit 31 != R[x] bit 31
         updateSR(&R[31], "OV", ((R[x] >> 31) & 0b1) == ((R[y] >> 31) & 0b1) && ((R[z] >> 31) & 0b1) != ((R[x] >> 31) & 0b1));
-        // CY <- R[z] bit 32 = 1
         updateSR(&R[31], "CY", ((uresult >> 32) & 0b1) == 0b1);
 
         formatR(zName, z);
         formatR(xName, x);
         formatR(yName, y);
-
-        sprintf(instrucao, "add %s,%s,%s", zName, xName, yName);
+        
+        sprintf(instruction, "add %s,%s,%s", zName, xName, yName);
         toUpperCase(zName);
         toUpperCase(xName);
         toUpperCase(yName);
-        fprintf(output, "0x%08X:\t%-25s\t%s=%s+%s=0x%08X,SR=0x%08X\n", R[29], instrucao, zName, xName, yName, R[z], R[31]);
+        fprintf(output, "0x%08X:\t%-25s\t%s=%s+%s=0x%08X,SR=0x%08X\n", R[29], instruction, zName, xName, yName, R[z], R[31]);
         break;
       case 0b000011:
-        // sub - operação de subtração com registradores
-        uTypeInstructionZXY(R, &z, &x, &y);
+        // sub
+        UTypeInstructionZXY(R, &z, &x, &y);
 
         if (z != 0) {
           uresult = (uint64_t)(R[x]) - (uint64_t)(R[y]);
           R[z] = R[x] - R[y];
         }
 
-        // ZN <- R[z] = 0
         updateSR(&R[31], "ZN", R[z] == 0);
-        // SN <- R[z] bit 31 = 1
         updateSR(&R[31], "SN", ((R[z] >> 31) & 0b1) == 0b1);
-        // OV <- R[x] bit 31 != R[y] bit 31 && R[z] bit 31 != R[x] bit 31
         updateSR(&R[31], "OV", ((R[x] >> 31) & 0b1) != ((R[y] >> 31) & 0b1) && ((R[z] >> 31) & 0b1) != ((R[x] >> 31) & 0b1));
-        // CY <- R[z] bit 32 = 1
         updateSR(&R[31], "CY", ((uresult >> 32) & 0b1) == 0b1);
 
         formatR(zName, z);
         formatR(xName, x);
         formatR(yName, y);
 
-        sprintf(instrucao, "sub %s,%s,%s", zName, xName, yName);
+        sprintf(instruction, "sub %s,%s,%s", zName, xName, yName);
         toUpperCase(zName);
         toUpperCase(xName);
         toUpperCase(yName);
-        fprintf(output, "0x%08X:\t%-25s\t%s=%s-%s=0x%08X,SR=0x%08X\n", R[29], instrucao, zName, xName, yName, R[z], R[31]);
+        fprintf(output, "0x%08X:\t%-25s\t%s=%s-%s=0x%08X,SR=0x%08X\n", R[29], instruction, zName, xName, yName, R[z], R[31]);
         break;
       case 0b000100:
-        uTypeInstructionZXYL(R, &z, &x, &y, &l);
-        uint8_t codigoAux = (R[28] & 0x00000700) >> 8;
+        UTypeInstructionZXYL(R, &z, &x, &y, &l);
+        uint8_t auxiliarCode = (R[28] & 0x00000700) >> 8;
 
-        switch (codigoAux) {
+        switch (auxiliarCode) {
           case 0b000:
-            // mul - operação de multiplicação com registradores (sem sinal)
-            // R[l] : R[z] = R[x] * R[y]
+            // mul
             uint64_t mul = (uint64_t)R[x] * (uint64_t)R[y];
             if (z != 0) R[z] = mul;
             if (l != 0) R[l] = mul >> 32;
 
-            // ZN <- R[l] : R[z] = 0
             updateSR(&R[31], "ZN", R[l] == 0 && R[z] == 0);
-            // CY <- R[l] != 0
             updateSR(&R[31], "CY", R[l] != 0);
 
             formatR(zName, z);
@@ -216,46 +168,40 @@ int main (int argc, char* argv[]) {
             formatR(yName, y);
             formatR(lName, l);
 
-            sprintf(instrucao, "mul %s,%s,%s,%s", lName, zName, xName, yName);
+            sprintf(instruction, "mul %s,%s,%s,%s", lName, zName, xName, yName);
             toUpperCase(zName);
             toUpperCase(xName);
             toUpperCase(yName);
             toUpperCase(lName);
-            fprintf(output, "0x%08X:\t%-25s\t%s:%s=%s*%s=0x%08X%08X,SR=0x%08X\n", R[29], instrucao, lName, zName, xName, yName, R[l], R[z], R[31]);
+            fprintf(output, "0x%08X:\t%-25s\t%s:%s=%s*%s=0x%08X%08X,SR=0x%08X\n", R[29], instruction, lName, zName, xName, yName, R[l], R[z], R[31]);
             break;
           case 0b001:
-            // sll - operação de deslocamento para esquerda (sem sinal)
-            // R[z] : R[x] = (R[z] : R[y]) * 2 ** (l + 1)
+            // sll
             uint64_t sll = (uint64_t)(R[z]) << 32 | (uint64_t)(R[y]);
             sll = sll << (l + 1);
             if (x != 0) R[x] = sll;
             if (z != 0) R[z] = sll >> 32;
 
-            // ZN <- R[z] : R[x] = 0
             updateSR(&R[31], "ZN", R[z] == 0 && R[x] == 0);
-            // CY <- R[z] != 0
             updateSR(&R[31], "CY", R[z] != 0);
-
+            
             formatR(zName, z);
             formatR(xName, x);
             formatR(yName, y);
 
-            sprintf(instrucao, "sll %s,%s,%s,%u", zName, xName, yName, l);
+            sprintf(instruction, "sll %s,%s,%s,%u", zName, xName, yName, l);
             toUpperCase(zName);
             toUpperCase(xName);
             toUpperCase(yName);
-            fprintf(output, "0x%08X:\t%-25s\t%s:%s=%s:%s<<%u=0x%08X%08X,SR=0x%08X\n", R[29], instrucao, zName, xName, zName, yName, l + 1, R[z], R[x], R[31]);
+            fprintf(output, "0x%08X:\t%-25s\t%s:%s=%s:%s<<%u=0x%08X%08X,SR=0x%08X\n", R[29], instruction, zName, xName, zName, yName, l + 1, R[z], R[x], R[31]);
             break;
           case 0b010:
-            // muls - operação de multiplicação com registradores (com sinal)
-            // R[l] : R[z] = R[x] * R[y]
+            // muls
             int64_t muls = signalExtension64(R[x]) * signalExtension64(R[y]);
             if (z != 0) R[z] = muls;
             if (l != 0) R[l] = muls >> 32;
-
-            // ZN <- R[l] : R[z] = 0
+            
             updateSR(&R[31], "ZN", R[l] == 0 && R[z] == 0);
-            // OV <- R[l] != 0
             updateSR(&R[31], "OV", R[l] != 0);
 
             formatR(zName, z);
@@ -263,50 +209,42 @@ int main (int argc, char* argv[]) {
             formatR(yName, y);
             formatR(lName, l);
 
-            sprintf(instrucao, "muls %s,%s,%s,%s", lName, zName, xName, yName);
+            sprintf(instruction, "muls %s,%s,%s,%s", lName, zName, xName, yName);
             toUpperCase(zName);
             toUpperCase(xName);
             toUpperCase(yName);
             toUpperCase(lName);
-            fprintf(output, "0x%08X:\t%-25s\t%s:%s=%s*%s=0x%08X%08X,SR=0x%08X\n", R[29], instrucao, lName, zName, xName, yName, R[l], R[z], R[31]);
+            fprintf(output, "0x%08X:\t%-25s\t%s:%s=%s*%s=0x%08X%08X,SR=0x%08X\n", R[29], instruction, lName, zName, xName, yName, R[l], R[z], R[31]);
             break;
           case 0b011:
-            // sla - operação de deslocamento para esquerda (com sinal)
-            // R[z] : R[x] = (R[z] : R[y]) * 2 ** (l + 1)
+            // sla
             int64_t sla = signalExtension64(R[z]) << 32 | signalExtension64(R[y]);
             sla = sla << (l + 1);
             if (x != 0) R[x] = sla;
             if (z != 0) R[z] = sla >> 32;
 
-            // ZN <- R[z] : R[x] = 0
             updateSR(&R[31], "ZN", R[z] == 0 && R[x] == 0);
-            // OV <- R[z] != 0
             updateSR(&R[31], "OV", R[z] != 0);
 
             formatR(zName, z);
             formatR(xName, x);
             formatR(yName, y);
 
-            sprintf(instrucao, "sla %s,%s,%s,%u", zName, xName, yName, l);
+            sprintf(instruction, "sla %s,%s,%s,%u", zName, xName, yName, l);
             toUpperCase(zName);
             toUpperCase(xName);
             toUpperCase(yName);
-            fprintf(output, "0x%08X:\t%-25s\t%s:%s=%s:%s<<%u=0x%08X%08X,SR=0x%08X\n", R[29], instrucao, zName, xName, zName, yName, l + 1, R[z], R[x], R[31]);
+            fprintf(output, "0x%08X:\t%-25s\t%s:%s=%s:%s<<%u=0x%08X%08X,SR=0x%08X\n", R[29], instruction, zName, xName, zName, yName, l + 1, R[z], R[x], R[31]);
             break;
           case 0b100:
-            // div - operação de divisão com registradores (sem sinal)
+            // div
             if (R[y] == 0) updateSR(&R[31], "ZD", R[y] == 0);
             else {
-              // R[l] = R[x] mod R[y]
               if (l != 0) R[l] = R[x] % R[y];
-              // R[z] = R[x] ÷ R[y]
               if (z != 0) R[z] = R[x] / R[y];
 
-              // ZD <- R[y] = 0
               updateSR(&R[31], "ZD", R[y] == 0);
-              // ZN <- R[z] = 0
               updateSR(&R[31], "ZN", R[z] == 0);
-              // CY <- R[l] != 0
               updateSR(&R[31], "CY", R[l] != 0);
             }
 
@@ -314,58 +252,50 @@ int main (int argc, char* argv[]) {
             formatR(xName, x);
             formatR(yName, y);
             formatR(lName, l);
-
-            sprintf(instrucao, "div %s,%s,%s,%s", lName, zName, xName, yName);
+            
+            sprintf(instruction, "div %s,%s,%s,%s", lName, zName, xName, yName);
 
             toUpperCase(zName);
             toUpperCase(xName);
             toUpperCase(yName);
             toUpperCase(lName);
 
-            fprintf(output, "0x%08X:\t%-25s\t%s=%s%%%s=0x%08X,%s=%s/%s=0x%08X,SR=0x%08X\n", R[29], instrucao, lName, xName, yName, R[l], zName, xName, yName, R[z], R[31]);
+            fprintf(output, "0x%08X:\t%-25s\t%s=%s%%%s=0x%08X,%s=%s/%s=0x%08X,SR=0x%08X\n", R[29], instruction, lName, xName, yName, R[l], zName, xName, yName, R[z], R[31]);
             break;
           case 0b101:
-            // srl - operação de deslocamento para direita (sem sinal)
-            // R[z] : R[x] = (R[z] : R[y]) ÷ 2 ** (l + 1)
+            // srl
             uint64_t srl = (uint64_t)(R[z]) << 32 | (uint64_t)(R[y]);
             srl = srl >> (l + 1);
             if (x != 0) R[x] = srl;
             if (z != 0) R[z] = srl >> 32;
 
-            // ZN <- R[z] : R[x] = 0
             updateSR(&R[31], "ZN", R[z] == 0 && R[x] == 0);
-            // CY <- R[z] != 0
             updateSR(&R[31], "CY", R[z] != 0);
 
             formatR(zName, z);
             formatR(xName, x);
             formatR(yName, y);
 
-            sprintf(instrucao, "srl %s,%s,%s,%u", zName, xName, yName, l);
+            sprintf(instruction, "srl %s,%s,%s,%u", zName, xName, yName, l);
             toUpperCase(zName);
             toUpperCase(xName);
             toUpperCase(yName);
-            fprintf(output, "0x%08X:\t%-25s\t%s:%s=%s:%s>>%u=0x%08X%08X,SR=0x%08X\n", R[29], instrucao, zName, xName, zName, yName, l + 1, R[z], R[x], R[31]);
+            fprintf(output, "0x%08X:\t%-25s\t%s:%s=%s:%s>>%u=0x%08X%08X,SR=0x%08X\n", R[29], instruction, zName, xName, zName, yName, l + 1, R[z], R[x], R[31]);
             break;
           case 0b110:
-            // divs - operação de divisão com registradores (com sinal)
+            // divs
             int32_t divs = 0;
             int32_t mods = 0;
             if (R[y] == 0) updateSR(&R[31], "ZD", R[y] == 0);
             else {
-              // R[l] = R[x] mod R[y]
               mods = (int32_t)(R[x]) % (int32_t)(R[y]);
-              // R[z] = R[x] ÷ R[y]
               divs = (int32_t)(R[x]) / (int32_t)(R[y]);
 
               if (l != 0) R[l] = mods;
               if (z != 0) R[z] = divs;
 
-              // ZD <- R[y] = 0
               updateSR(&R[31], "ZD", R[y] == 0);
-              // OV <- R[l] != 0
               updateSR(&R[31], "OV", R[l] != 0);
-              // ZN <- R[z] = 0
               updateSR(&R[31], "ZN", R[z] == 0);
             }
 
@@ -374,288 +304,255 @@ int main (int argc, char* argv[]) {
             formatR(yName, y);
             formatR(lName, l);
 
-            sprintf(instrucao, "divs %s,%s,%s,%s", lName, zName, xName, yName);
+            sprintf(instruction, "divs %s,%s,%s,%s", lName, zName, xName, yName);
             toUpperCase(zName);
             toUpperCase(xName);
             toUpperCase(yName);
             toUpperCase(lName);
-            fprintf(output, "0x%08X:\t%-25s\t%s=%s%%%s=0x%08X,%s=%s/%s=0x%08X,SR=0x%08X\n", R[29], instrucao, lName, xName, yName, R[l], zName, xName, yName, R[z], R[31]);
+            fprintf(output, "0x%08X:\t%-25s\t%s=%s%%%s=0x%08X,%s=%s/%s=0x%08X,SR=0x%08X\n", R[29], instruction, lName, xName, yName, R[l], zName, xName, yName, R[z], R[31]);
             break;
           case 0b111:
-            // sra - operação de deslocamento para direita (com sinal)
-            // R[z] : R[x] = (R[z] : R[y]) ÷ 2 ** (l + 1)
+            // sra
             int64_t sra = signalExtension64(R[z]) << 32 | signalExtension64(R[y]);
             sra = (sra >> (l + 1));
             if (x != 0) R[x] = sra;
             if (z != 0) R[z] = sra >> 32;
 
-            // ZN <- R[z] : R[x] = 0
             updateSR(&R[31], "ZN", R[z] == 0 && R[x] == 0);
-            // OV <- R[z] != 0
             updateSR(&R[31], "OV", R[z] != 0);
 
             formatR(zName, z);
             formatR(xName, x);
             formatR(yName, y);
 
-            sprintf(instrucao, "sra %s,%s,%s,%u", zName, xName, yName, l);
+            sprintf(instruction, "sra %s,%s,%s,%u", zName, xName, yName, l);
             toUpperCase(zName);
             toUpperCase(xName);
             toUpperCase(yName);
-            fprintf(output, "0x%08X:\t%-25s\t%s:%s=%s:%s>>%u=0x%08X%08X,SR=0x%08X\n", R[29], instrucao, zName, yName, zName, xName, l + 1, R[z], R[x], R[31]);
+            fprintf(output, "0x%08X:\t%-25s\t%s:%s=%s:%s>>%u=0x%08X%08X,SR=0x%08X\n", R[29], instruction, zName, yName, zName, xName, l + 1, R[z], R[x], R[31]);
             break;
           default:
-            fprintf(output, "Instrucao desconhecida!\n");
+            fprintf(output, "instruction desconhecida!\n");
             break;
         }
         break;
       case 0b000101:
-        // cmp - operação de comparação
-        uTypeInstructionXY(R, &x, &y);
+        // cmp
+        UTypeInstructionXY(R, &x, &y);
 
         int64_t cmp = (int64_t)R[x] - (int64_t)R[y];
 
-        // ZN <- CMP = 0
         updateSR(&R[31], "ZN", cmp == 0);
-        // SN <- CMP bit 31 = 1
         updateSR(&R[31], "SN", ((cmp >> 31) & 0b1) == 0b1);
-        // OV <- (R[x] bit 31 != R[y] bit 31) && (CMP bit 31 != R[x] bit 31) 
         updateSR(&R[31], "OV", ((R[x] >> 31) & 0b1) != ((R[y] >> 31) & 0b1) && ((cmp >> 31) & 0b1) != ((R[x] >> 31) & 0b1));
-        // CY <- CMP bit 32 = 1
         updateSR(&R[31], "CY", ((cmp >> 32) & 0b1) == 0b1);
 
         formatR(yName, y);
         formatR(xName, x);
 
-        sprintf(instrucao, "cmp %s,%s", xName, yName);
-        fprintf(output, "0x%08X:\t%-25s\tSR=0x%08X\n", R[29], instrucao, R[31]);
+        sprintf(instruction, "cmp %s,%s", xName, yName);
+        fprintf(output, "0x%08X:\t%-25s\tSR=0x%08X\n", R[29], instruction, R[31]);
         break;
       case 0b000110:
         // and
-        uTypeInstructionZXY(R, &z, &x, &y);
-
+        UTypeInstructionZXY(R, &z, &x, &y);
+        
         if (z != 0) R[z] = R[x] & R[y];
 
-        // ZN <- R[z] = 0
         updateSR(&R[31], "ZN", R[z] == 0);
-        // SN <- R[z] bit 31 = 1
         updateSR(&R[31], "SN", ((R[z] >> 31) & 0b1) == 0b1);
 
         formatR(zName, z);
         formatR(xName, x);
         formatR(yName, y);
 
-        sprintf(instrucao, "and %s,%s,%s", zName, xName, yName);
+        sprintf(instruction, "and %s,%s,%s", zName, xName, yName);
         toUpperCase(zName);
         toUpperCase(xName);
         toUpperCase(yName);
-        fprintf(output, "0x%08X:\t%-25s\t%s=%s&%s=0x%08X,SR=0x%08X\n", R[29], instrucao, zName, xName, yName, R[z], R[31]);
+        fprintf(output, "0x%08X:\t%-25s\t%s=%s&%s=0x%08X,SR=0x%08X\n", R[29], instruction, zName, xName, yName, R[z], R[31]);
         break;
       case 0b000111:
         // or
-        uTypeInstructionZXY(R, &z, &x, &y);
+        UTypeInstructionZXY(R, &z, &x, &y);
 
         if (z != 0) R[z] = R[x] | R[y];
 
-        // ZN <- R[z] = 0
         updateSR(&R[31], "ZN", R[z] == 0);
-        // SN <- R[z] bit 31 = 1
         updateSR(&R[31], "SN", ((R[z] >> 31) & 0b1) == 0b1);
 
         formatR(zName, z);
         formatR(xName, x);
         formatR(yName, y);
 
-        sprintf(instrucao, "or %s,%s,%s", zName, xName, yName);
+        sprintf(instruction, "or %s,%s,%s", zName, xName, yName);
         toUpperCase(zName);
         toUpperCase(xName);
         toUpperCase(yName);
-        fprintf(output, "0x%08X:\t%-25s\t%s=%s|%s=0x%08X,SR=0x%08X\n", R[29], instrucao, zName, xName, yName, R[z], R[31]);
+        fprintf(output, "0x%08X:\t%-25s\t%s=%s|%s=0x%08X,SR=0x%08X\n", R[29], instruction, zName, xName, yName, R[z], R[31]);
         break;
       case 0b001000:
         // not
-        uTypeInstructionZX(R, &z, &x);
+        UTypeInstructionZX(R, &z, &x);
 
         if (z != 0) R[z] = ~R[x];
 
-        // ZN <- R[z] = 0
         updateSR(&R[31], "ZN", R[z] == 0);
-        // SN <- R[z] bit 31 = 1
         updateSR(&R[31], "SN", ((R[z] >> 31) & 0b1) == 0b1);
 
         formatR(zName, z);
         formatR(xName, x);
 
-        sprintf(instrucao, "not %s,%s", zName, xName);
+        sprintf(instruction, "not %s,%s", zName, xName);
         toUpperCase(zName);
         toUpperCase(xName);
-        fprintf(output, "0x%08X:\t%-25s\t%s=~%s=0x%08X,SR=0x%08X\n", R[29], instrucao, zName, xName, R[z], R[31]);
+        fprintf(output, "0x%08X:\t%-25s\t%s=~%s=0x%08X,SR=0x%08X\n", R[29], instruction, zName, xName, R[z], R[31]);
         break;
       case 0b001001:
         // xor
-        uTypeInstructionZXY(R, &z, &x, &y);
+        UTypeInstructionZXY(R, &z, &x, &y);
 
         if(z != 0) R[z] = R[x] ^ R[y];
 
-        // ZN <- R[z] = 0
         updateSR(&R[31], "ZN", R[z] == 0);
-        // SN <- R[z] bit 31 = 1
         updateSR(&R[31], "SN", ((R[z] >> 31) & 0b1) == 0b1);
 
         formatR(zName, z);
         formatR(xName, x);
         formatR(yName, y);
 
-        sprintf(instrucao, "xor %s,%s,%s", zName, xName, yName);
+        sprintf(instruction, "xor %s,%s,%s", zName, xName, yName);
         toUpperCase(zName);
         toUpperCase(xName);
         toUpperCase(yName);
-        fprintf(output, "0x%08X:\t%-25s\t%s=%s^%s=0x%08X,SR=0x%08X\n", R[29], instrucao, zName, xName, yName, R[z], R[31]);
+        fprintf(output, "0x%08X:\t%-25s\t%s=%s^%s=0x%08X,SR=0x%08X\n", R[29], instruction, zName, xName, yName, R[z], R[31]);
         break;
       case 0b010010:
-        // addi - operação de adição imediata
-        fTypeInstructionZXI(R, &z, &x, &i);
+        // addi
+        FTypeInstructionZXI(R, &z, &x, &i);
 
         if (z != 0) {
           result = (uint64_t)(R[x]) + (uint64_t)(i);
           R[z] = result;
         }
 
-        // ZN <- R[z] = 0
         updateSR(&R[31], "ZN", R[z] == 0);
-        // SN <- R[z] bit 31 = 1
         updateSR(&R[31], "SN", ((R[z] >> 31) & 0b1) == 0b1);
-        // OV <- (R[x] bit 31 == i bit 15) && (R[z] bit 31 != R[x] bit 31) 
         updateSR(&R[31], "OV", ((R[x] >> 31) & 0b1) == ((i >> 15) & 0b1) && ((R[z] >> 31) & 0b1) != ((R[x] >> 31) & 0b1));
-        // CY <- R[z] bit 32 = 1
         updateSR(&R[31], "CY", ((result >> 32) & 0b1) == 1);
 
         formatR(zName, z);
         formatR(xName, x);
 
-        sprintf(instrucao, "addi %s,%s,%i", zName, xName, i);
+        sprintf(instruction, "addi %s,%s,%i", zName, xName, i);
         toUpperCase(zName);
         toUpperCase(xName);
-        fprintf(output, "0x%08X:\t%-25s\t%s=%s+0x%08X=0x%08X,SR=0x%08X\n", R[29], instrucao, zName, xName, i, R[z], R[31]);
+        fprintf(output, "0x%08X:\t%-25s\t%s=%s+0x%08X=0x%08X,SR=0x%08X\n", R[29], instruction, zName, xName, i, R[z], R[31]);
         break;
       case 0b010011:
-        // subi - operação de subtração imediata
-        fTypeInstructionZXI(R, &z, &x, &i);
+        // subi
+        FTypeInstructionZXI(R, &z, &x, &i);
 
         if (z != 0) {
           result = (uint64_t)(R[x]) - (uint64_t)(i);
           R[z] = result;
         }
-
-        // ZN <- R[z] = 0
+        
         updateSR(&R[31], "ZN", R[z] == 0);
-        // SN <- R[z] bit 31 = 1
         updateSR(&R[31], "SN", ((R[z] >> 31) & 0b1) == 0b1);
-        // OV <- (R[x] bit 31 != i bit 15) && (R[z] bit 31 != R[x] bit 31) 
         updateSR(&R[31], "OV", ((R[x] >> 31) & 0b1) != ((i >> 15) & 0b1) && ((R[z] >> 31) & 0b1) != ((R[x] >> 31) & 0b1));
-        // CY <- R[z] bit 32 = 1
         updateSR(&R[31], "CY", ((result >> 32) & 0b1) == 1);
 
         formatR(zName, z);
         formatR(xName, x);
 
-        sprintf(instrucao, "subi %s,%s,%i", zName, xName, i);
+        sprintf(instruction, "subi %s,%s,%i", zName, xName, i);
         toUpperCase(zName);
         toUpperCase(xName);
-        fprintf(output, "0x%08X:\t%-25s\t%s=%s-0x%08X=0x%08X,SR=0x%08X\n", R[29], instrucao, zName, xName, i, R[z], R[31]);
+        fprintf(output, "0x%08X:\t%-25s\t%s=%s-0x%08X=0x%08X,SR=0x%08X\n", R[29], instruction, zName, xName, i, R[z], R[31]);
         break;
       case 0b010100:
-        // muli - operação de multiplicação imediata
-        fTypeInstructionZXI(R, &z, &x, &i);
+        // muli
+        FTypeInstructionZXI(R, &z, &x, &i);
 
         if (z != 0) {
           result = signalExtension64(R[x]) * signalExtension64(i);
           R[z] = result;
         }
-
-        // ZN <- R[z] = 0
+        
         updateSR(&R[31], "ZN", R[z] == 0);
-        // OV <- R[z] bits 63 ao 32 != 0
         updateSR(&R[31], "OV", (result >> 32) != 0);
 
         formatR(zName, z);
         formatR(xName, x);
 
-        sprintf(instrucao, "muli %s,%s,%i", zName, xName, i);
+        sprintf(instruction, "muli %s,%s,%i", zName, xName, i);
         toUpperCase(zName);
         toUpperCase(xName);
-        fprintf(output, "0x%08X:\t%-25s\t%s=%s*0x%08X=0x%08X,SR=0x%08X\n", R[29], instrucao, zName, xName, i, R[z], R[31]);
+        fprintf(output, "0x%08X:\t%-25s\t%s=%s*0x%08X=0x%08X,SR=0x%08X\n", R[29], instruction, zName, xName, i, R[z], R[31]);
         break;
       case 0b010101:
-        // divi - operação de divisão imediata
-        fTypeInstructionZXI(R, &z, &x, &i);
+        // divi
+        FTypeInstructionZXI(R, &z, &x, &i);
 
         if (i == 0) updateSR(&R[31], "ZD", i == 0);
         else {
           if (z != 0) R[z] = (int32_t)R[x] / (int32_t)i;
 
-	  // ZD <- R[y] = 0
-	  updateSR(&R[31], "ZD", R[y] == 0);
-	  // OV <- 0
+      	  updateSR(&R[31], "ZD", R[y] == 0);
           R[31] = R[31] & (~0x00000008);
-	  // ZN <- R[z] = 0
           updateSR(&R[31], "ZN", R[z] == 0);
         }
-
-
+        
         formatR(zName, z);
         formatR(xName, x);
 
-        sprintf(instrucao, "divi %s,%s,%i", zName, xName, i);
+        sprintf(instruction, "divi %s,%s,%i", zName, xName, i);
         toUpperCase(zName);
         toUpperCase(xName);
-        fprintf(output, "0x%08X:\t%-25s\t%s=%s/0x%08X=0x%08X,SR=0x%08X\n", R[29], instrucao, zName, xName, i, R[z], R[31]);
+        fprintf(output, "0x%08X:\t%-25s\t%s=%s/0x%08X=0x%08X,SR=0x%08X\n", R[29], instruction, zName, xName, i, R[z], R[31]);
         break;
       case 0b010110:
-        // modi - operação de resto imediato
-        fTypeInstructionZXI(R, &z, &x, &i);
+        // modi
+        FTypeInstructionZXI(R, &z, &x, &i);
 
         if (i == 0) updateSR(&R[31], "ZD", i == 0);
         else {
           if (z != 0) R[z] = (int32_t)(R[x]) % (int32_t)(i);
 
-	  updateSR(&R[31], "ZD", i == 0);          
+	        updateSR(&R[31], "ZD", i == 0);          
           R[31] = R[31] & (~0x00000008);
           updateSR(&R[31], "ZN", R[z] == 0);
         }
 
         formatR(zName, z);
         formatR(xName, x);
-
-        sprintf(instrucao, "modi %s,%s,%i", zName, xName, i);
+        
+        sprintf(instruction, "modi %s,%s,%i", zName, xName, i);
         toUpperCase(zName);
         toUpperCase(xName);
-        fprintf(output, "0x%08X:\t%-25s\t%s=%s%%0x%08X=0x%08X,SR=0x%08X\n", R[29], instrucao, zName, xName, i, R[z], R[31]);
+        fprintf(output, "0x%08X:\t%-25s\t%s=%s%%0x%08X=0x%08X,SR=0x%08X\n", R[29], instruction, zName, xName, i, R[z], R[31]);
         break;
       case 0b010111:
-        // cmpi - comparação imediata
-        fTypeInstructionXI(R, &x, &i);
-
+        // cmpi
+        FTypeInstructionXI(R, &x, &i);
+        
         int64_t cmpi = signalExtension64(R[x]) - signalExtension64(i);
 
-        // ZN <- CMPI = 0
         updateSR(&R[31], "ZN", cmpi == 0);
-        // SN <- CMPI bit 31 = 1
         updateSR(&R[31], "SN", ((cmpi >> 31) & 0b1) == 0b1);
-        // OV <- (R[x] bit 31 != i bit 15) && (CMPI bit 31 != R[x] bit 31) 
         updateSR(&R[31], "OV", ((R[x] >> 31) & 0b1) != ((i >> 15) & 0b1) && ((cmpi >> 31) & 0b1) != ((R[x] >> 31) & 0b1));
-        // CY <- CMPI bit 32 = 1
         updateSR(&R[31], "CY", ((cmpi >> 32) & 0b1) == 0b1);
 
         formatR(xName, x);
 
-        sprintf(instrucao, "cmpi %s,%i", xName, i);
-        fprintf(output, "0x%08X:\t%-25s\tSR=0x%08X\n", R[29], instrucao, R[31]);
+        sprintf(instruction, "cmpi %s,%i", xName, i);
+        fprintf(output, "0x%08X:\t%-25s\tSR=0x%08X\n", R[29], instruction, R[31]);
         break;
       case 0b011000:
-        // l8 - leitura de 8 bits na memória
-        fTypeInstructionZXI(R, &z, &x, &i);
-
+        // l8
+        FTypeInstructionZXI(R, &z, &x, &i);
+        
         if (z != 0) {
           R[z] = MEM32[(R[x] + i) >> 2];
           R[z] = R[z] >> (24 - ((R[x] + i) % 4) * 8);
@@ -665,14 +562,14 @@ int main (int argc, char* argv[]) {
         formatR(zName, z);
         formatR(xName, x);
 
-        sprintf(instrucao, "l8 %s,[%s%s%i]", zName, xName, (i >= 0) ? "+" : "", i);
+        sprintf(instruction, "l8 %s,[%s%s%i]", zName, xName, (i >= 0) ? "+" : "", i);
         toUpperCase(zName);
         toUpperCase(xName);
-        fprintf(output, "0x%08X:\t%-25s\t%s=MEM[0x%08X]=0x%02X\n", R[29], instrucao, zName, R[x] + i, R[z]);
+        fprintf(output, "0x%08X:\t%-25s\t%s=MEM[0x%08X]=0x%02X\n", R[29], instruction, zName, R[x] + i, R[z]);
         break;
       case 0b011001:
-        // l16 - leitura de 16 bits na memória
-        fTypeInstructionZXI(R, &z, &x, &i);
+        // l16
+        FTypeInstructionZXI(R, &z, &x, &i);
 
         if (z != 0) {
           R[z] = MEM32[(R[x] + i) >> 1];
@@ -683,14 +580,14 @@ int main (int argc, char* argv[]) {
         formatR(zName, z);
         formatR(xName, x);
 
-        sprintf(instrucao, "l16 %s,[%s%s%i]", zName, xName, (i >= 0) ? "+": "", i);
+        sprintf(instruction, "l16 %s,[%s%s%i]", zName, xName, (i >= 0) ? "+": "", i);
         toUpperCase(zName);
         toUpperCase(xName);
-        fprintf(output, "0x%08X:\t%-25s\t%s=MEM[0x%08X]=0x%04X\n", R[29], instrucao, zName, (R[x] + i) << 1, R[z]);
+        fprintf(output, "0x%08X:\t%-25s\t%s=MEM[0x%08X]=0x%04X\n", R[29], instruction, zName, (R[x] + i) << 1, R[z]);
         break;
       case 0b011010:
-        // l32 - leitura de 32 bits na memória
-        fTypeInstructionZXI(R, &z, &x, &i);
+        // l32
+        FTypeInstructionZXI(R, &z, &x, &i);
 
         if (z != 0)
           R[z] = MEM32[R[x] + i];
@@ -698,269 +595,258 @@ int main (int argc, char* argv[]) {
         formatR(zName, z);
         formatR(xName, x);
 
-        sprintf(instrucao, "l32 %s,[%s%s%i]", zName, xName, (i >= 0) ? "+": "", i);
+        sprintf(instruction, "l32 %s,[%s%s%i]", zName, xName, (i >= 0) ? "+": "", i);
         toUpperCase(zName);
         toUpperCase(xName);
-        fprintf(output, "0x%08X:\t%-25s\t%s=MEM[0x%08X]=0x%08X\n", R[29], instrucao, zName, (R[x] + i) << 2, R[z]);
+        fprintf(output, "0x%08X:\t%-25s\t%s=MEM[0x%08X]=0x%08X\n", R[29], instruction, zName, (R[x] + i) << 2, R[z]);
         break;
       case 0b011011:
-        // s8 - escrita de 8 bits na memória
-        fTypeInstructionZXI(R, &z, &x, &i);
+        // s8
+        FTypeInstructionZXI(R, &z, &x, &i);
 
         MEM32[R[x] + i] = R[z];
 
         formatR(zName, z);
         formatR(xName, x);
 
-        sprintf(instrucao, "s8 [%s%s%i],%s", xName, (i >= 0) ? "+": "", i, zName);
+        sprintf(instruction, "s8 [%s%s%i],%s", xName, (i >= 0) ? "+": "", i, zName);
         toUpperCase(zName);
         toUpperCase(xName);
-        fprintf(output, "0x%08X:\t%-25s\tMEM[0x%08X]=%s=0x%02X\n", R[29], instrucao, R[x] + i, zName, R[z]);
+        fprintf(output, "0x%08X:\t%-25s\tMEM[0x%08X]=%s=0x%02X\n", R[29], instruction, R[x] + i, zName, R[z]);
         break;
       case 0b011100:
-        // s16 - escrita de 16 bits na memória
-        fTypeInstructionZXI(R, &z, &x, &i);
+        // s16
+        FTypeInstructionZXI(R, &z, &x, &i);
 
         MEM32[(R[x] + i) << 1] = R[z];
 
         formatR(zName, z);
         formatR(xName, x);
 
-        sprintf(instrucao, "s16 [%s%s%i],%s", xName, (i >= 0) ? "+": "", i, zName);
+        sprintf(instruction, "s16 [%s%s%i],%s", xName, (i >= 0) ? "+": "", i, zName);
         toUpperCase(zName);
         toUpperCase(xName);
-        fprintf(output, "0x%08X:\t%-25s\tMEM[0x%08X]=%s=0x%04X\n", R[29], instrucao, (R[x] + i) << 1, zName, R[z]);
+        fprintf(output, "0x%08X:\t%-25s\tMEM[0x%08X]=%s=0x%04X\n", R[29], instruction, (R[x] + i) << 1, zName, R[z]);
         break;
       case 0b011101:
-        // s32 - escrita de 32 bits na memória
-        fTypeInstructionZXI(R, &z, &x, &i);
+        // s32
+        FTypeInstructionZXI(R, &z, &x, &i);
 
         MEM32[(R[x] + i) << 2] = R[z];
 
         formatR(zName, z);
         formatR(xName, x);
 
-        sprintf(instrucao, "s32 [%s%s%i],%s", xName, (i >= 0) ? "+": "", i, zName);
+        sprintf(instruction, "s32 [%s%s%i],%s", xName, (i >= 0) ? "+": "", i, zName);
         toUpperCase(zName);
         toUpperCase(xName);
-        fprintf(output, "0x%08X:\t%-25s\tMEM[0x%08X]=%s=0x%08X\n", R[29], instrucao, (R[x] + i) << 2, zName, R[z]);
+        fprintf(output, "0x%08X:\t%-25s\tMEM[0x%08X]=%s=0x%08X\n", R[29], instruction, (R[x] + i) << 2, zName, R[z]);
         break;
       case 0b101010:
-        // bae - condição AT(above or equal sem sinal) -> CY = 0
-        sTypeInstruction(&pcAntigo, R, &i);
+        // bae
+        STypeInstruction(&oldPC, R, &i);
 
         if ((R[31] & 0x00000001) == 0) R[29] = R[29] + (i << 2);
 
-        sprintf(instrucao, "bae %i", i);
-        fprintf(output, "0x%08X:\t%-25s\tPC=0x%08X\n", pcAntigo, instrucao, (R[29] + 4));
+        sprintf(instruction, "bae %i", i);
+        fprintf(output, "0x%08X:\t%-25s\tPC=0x%08X\n", oldPC, instruction, (R[29] + 4));
         break;
       case 0b101011:
-        // bat - condição AT(above than sem sinal) -> ZN = 0 && CY = 0
-        sTypeInstruction(&pcAntigo, R, &i);
-
+        // bat
+        STypeInstruction(&oldPC, R, &i);
+        
         if ((R[31] & 0x00000040) == 0 && (R[31] & 0x00000001) == 0) R[29] = R[29] + (i << 2);
-
-        sprintf(instrucao, "bat %i", i);
-        fprintf(output, "0x%08X:\t%-25s\tPC=0x%08X\n", pcAntigo, instrucao, (R[29] + 4));
+        
+        sprintf(instruction, "bat %i", i);
+        fprintf(output, "0x%08X:\t%-25s\tPC=0x%08X\n", oldPC, instruction, (R[29] + 4));
         break;
       case 0b101100:
-        // bbe - condição BE(below or equal sem sinal) -> ZN = 1 or CY = 1
-        sTypeInstruction(&pcAntigo, R, &i);
-
+        // bbe
+        STypeInstruction(&oldPC, R, &i);
+       
         if ((R[31] & 0x00000040) != 0 || (R[31] & 0x00000001) != 0) R[29] = R[29] + (i << 2);
-
-        sprintf(instrucao, "bbe %i", i);
-        fprintf(output, "0x%08X:\t%-25s\tPC=0x%08X\n", pcAntigo, instrucao, (R[29] + 4));
+        
+        sprintf(instruction, "bbe %i", i);
+        fprintf(output, "0x%08X:\t%-25s\tPC=0x%08X\n", oldPC, instruction, (R[29] + 4));
         break;
       case 0b101101:
-        // bbt - condição BT(below than sem sinal) -> CY = 1
-        sTypeInstruction(&pcAntigo, R, &i);
+        // bbt
+        STypeInstruction(&oldPC, R, &i);
 
         if ((R[31] & 0x00000001) != 0) R[29] = R[29] + (i << 2);
-
-        sprintf(instrucao, "bbt %i", i);
-        fprintf(output, "0x%08X:\t%-25s\tPC=0x%08X\n", pcAntigo, instrucao, (R[29] + 4));
+        
+        sprintf(instruction, "bbt %i", i);
+        fprintf(output, "0x%08X:\t%-25s\tPC=0x%08X\n", oldPC, instruction, (R[29] + 4));
         break;
       case 0b101110:
-        // beq - condição EQ(equal) -> ZN = 1
-        sTypeInstruction(&pcAntigo, R, &i);
+        // beq
+        STypeInstruction(&oldPC, R, &i);
 
         if ((R[31] & 0x00000040) != 0) R[29] = R[29] + (i << 2);
-
-        sprintf(instrucao, "beq %i", i);
-        fprintf(output, "0x%08X:\t%-25s\tPC=0x%08X\n", pcAntigo, instrucao, (R[29] + 4));
+        
+        sprintf(instruction, "beq %i", i);
+        fprintf(output, "0x%08X:\t%-25s\tPC=0x%08X\n", oldPC, instruction, (R[29] + 4));
         break;
       case 0b101111:
-        // bge - condição GE(greater or equal com sinal) -> SN = OV
-        sTypeInstruction(&pcAntigo, R, &i);
+        // bge
+        STypeInstruction(&oldPC, R, &i);
 
         if ((R[31] & 0x00000010) >> 4 == (R[31] & 0x00000008) >> 3) R[29] = R[29] + (i << 2);
-
-        sprintf(instrucao, "bge %i", i);
-        fprintf(output, "0x%08X:\t%-25s\tPC=0x%08X\n", pcAntigo, instrucao, (R[29] + 4));
+        
+        sprintf(instruction, "bge %i", i);
+        fprintf(output, "0x%08X:\t%-25s\tPC=0x%08X\n", oldPC, instruction, (R[29] + 4));
         break;
       case 0b110000:
-        // bgt - condição GT(greater than com sinal) -> ZN = 0 && SN = OV
-        sTypeInstruction(&pcAntigo, R, &i);
+        // bgt
+        STypeInstruction(&oldPC, R, &i);
 
         if ((R[31] & 0x00000040) == 0 && (R[31] & 0x00000010) >> 4 == (R[31] & 0x00000008) >> 3) R[29] = R[29] + (i << 2);
-
-        sprintf(instrucao, "bgt %i", i);
-        fprintf(output, "0x%08X:\t%-25s\tPC=0x%08X\n", pcAntigo, instrucao, (R[29] + 4));
+        
+        sprintf(instruction, "bgt %i", i);
+        fprintf(output, "0x%08X:\t%-25s\tPC=0x%08X\n", oldPC, instruction, (R[29] + 4));
         break;
       case 0b110001:
-        // biv - condição IV(invalid) -> IV = 1
-        sTypeInstruction(&pcAntigo, R, &i);
+        // biv
+        STypeInstruction(&oldPC, R, &i);
 
         if ((R[31] & 0x00000004) != 0) R[29] = R[29] + (i << 2);
-
-        sprintf(instrucao, "biv %i", i);
-        fprintf(output, "0x%08X:\t%-25s\tPC=0x%08X\n", pcAntigo, instrucao, (R[29] + 4));
+        
+        sprintf(instruction, "biv %i", i);
+        fprintf(output, "0x%08X:\t%-25s\tPC=0x%08X\n", oldPC, instruction, (R[29] + 4));
         break;
       case 0b110010:
-        // ble - condição LE(less or equal com sinal) -> ZN = 1 or SN != OV
-        sTypeInstruction(&pcAntigo, R, &i);
+        // ble
+        STypeInstruction(&oldPC, R, &i);
 
         if ((R[31] & 0x00000040) != 0 || (R[31] & 0x00000010) >> 4 != (R[31] & 0x00000008) >> 3) R[29] = R[29] + (i << 2);
-
-        sprintf(instrucao, "ble %i", i);
-        fprintf(output, "0x%08X:\t%-25s\tPC=0x%08X\n", pcAntigo, instrucao, (R[29] + 4));
+        
+        sprintf(instruction, "ble %i", i);
+        fprintf(output, "0x%08X:\t%-25s\tPC=0x%08X\n", oldPC, instruction, (R[29] + 4));
         break;
       case 0b110011:
-        // blt - condição LT(less than com sinal) -> SN != OV
-        sTypeInstruction(&pcAntigo, R, &i);
+        // blt
+        STypeInstruction(&oldPC, R, &i);
 
         if ((R[31] & 0x00000010) >> 4 != (R[31] & 0x00000008) >> 3) R[29] = R[29] + (i << 2);
-
-        sprintf(instrucao, "blt %i", i);
-        fprintf(output, "0x%08X:\t%-25s\tPC=0x%08X\n", pcAntigo, instrucao, (R[29] + 4));
+        
+        sprintf(instruction, "blt %i", i);
+        fprintf(output, "0x%08X:\t%-25s\tPC=0x%08X\n", oldPC, instruction, (R[29] + 4));
         break;
       case 0b110100:
-        // bne - condição NE(not equal) -> ZN = 0
-        sTypeInstruction(&pcAntigo, R, &i);
+        // bne
+        STypeInstruction(&oldPC, R, &i);
 
         if ((R[31] & 0x00000040) == 0) R[29] = R[29] + (i << 2);
-
-        sprintf(instrucao, "bne %i", i);
-        fprintf(output, "0x%08X:\t%-25s\tPC=0x%08X\n", pcAntigo, instrucao, (R[29] + 4));
+        
+        sprintf(instruction, "bne %i", i);
+        fprintf(output, "0x%08X:\t%-25s\tPC=0x%08X\n", oldPC, instruction, (R[29] + 4));
         break;
       case 0b110101:
-        // bni - condição NI(not invalid) -> IV = 0
-        sTypeInstruction(&pcAntigo, R, &i);
+        // bni
+        STypeInstruction(&oldPC, R, &i);
 
         if ((R[31] & 0x00000004) == 0) R[29] = R[29] + (i << 2);
-
-        sprintf(instrucao, "bni %i", i);
-        fprintf(output, "0x%08X:\t%-25s\tPC=0x%08X\n", pcAntigo, instrucao, (R[29] + 4));
+        
+        sprintf(instruction, "bni %i", i);
+        fprintf(output, "0x%08X:\t%-25s\tPC=0x%08X\n", oldPC, instruction, (R[29] + 4));
         break;
       case 0b110110:
-        // bnz - condição NZ(not zero division) -> ZD = 0
-        sTypeInstruction(&pcAntigo, R, &i);
+        // bnz
+        STypeInstruction(&oldPC, R, &i);
 
         if ((R[31] & 0x00000020) == 0) R[29] = R[29] + (i << 2);
-
-        sprintf(instrucao, "bnz %i", i);
-        fprintf(output, "0x%08X:\t%-25s\tPC=0x%08X\n", pcAntigo, instrucao, (R[29] + 4));
+        
+        sprintf(instruction, "bnz %i", i);
+        fprintf(output, "0x%08X:\t%-25s\tPC=0x%08X\n", oldPC, instruction, (R[29] + 4));
         break;
       case 0b110111:
-        // bun - desvio incondicional
-        sTypeInstruction(&pcAntigo, R, &i);
-
+        // bun
+        STypeInstruction(&oldPC, R, &i);
+ 
         R[29] = R[29] + (i << 2);
-
-        sprintf(instrucao, "bun %i", i);
-        fprintf(output, "0x%08X:\t%-25s\tPC=0x%08X\n", pcAntigo, instrucao, (R[29] + 4));
+        
+        sprintf(instruction, "bun %i", i);
+        fprintf(output, "0x%08X:\t%-25s\tPC=0x%08X\n", oldPC, instruction, (R[29] + 4));
         break;
       case 0b111000:
-        // bzd - condição ZD(zero division) -> ZD = 1
-        sTypeInstruction(&pcAntigo, R, &i);
+        // bzd
+        STypeInstruction(&oldPC, R, &i);
 
         if ((R[31] & 0x00000020) >> 5 == 1) R[29] = R[29] + (i << 2);
-
-        sprintf(instrucao, "bzd %i", i);
-        fprintf(output, "0x%08X:\t%-25s\tPC=0x%08X\n", pcAntigo, instrucao, (R[29] + 4));
+        
+        sprintf(instruction, "bzd %i", i);
+        fprintf(output, "0x%08X:\t%-25s\tPC=0x%08X\n", oldPC, instruction, (R[29] + 4));
         break;
       case 0b111111:
-        // int - interrupção do programa
-        // se i = 0, a execução é finalizada
-        // i(26 bits menos significativos) = R[28] & 0x03FFFFFF;
+        // int
         R[29] = R[29] << 2;
 
         i = R[28] & 0x03FFFFFF;
-        if (i == 0) execucao = 0;
-
-        sprintf(instrucao, "int %u", i);
-        fprintf(output, "0x%08X:\t%-25s\tCR=0x00000000,PC=0x00000000\n", R[29], instrucao);
+        if (i == 0) running = 0;
+        
+        sprintf(instruction, "int %u", i);
+        fprintf(output, "0x%08X:\t%-25s\tCR=0x00000000,PC=0x00000000\n", R[29], instruction);
         break;
       case 0b011110:
-        // call (tipo F) - chamada de sub-rotina
-        fTypeInstructionPCXI(&pcAntigo, R, &x, &i);
-        spAntigo = R[30];
+        // call (F type)
+        FTypeInstructionPCXI(&oldPC, R, &x, &i);
+        oldSP = R[30];
 
-        // MEM[SP] = PC + 4
         MEM32[R[30] >> 2] = R[29] + 4;
-        // PC = (R[x] + i) << 2
         R[29] = (R[x] + i) << 2;
 
         formatR(xName, x);
 
-        sprintf(instrucao, "call [%s%s%i]", xName, (i >= 0) ? "+" : "", i);
+        sprintf(instruction, "call [%s%s%i]", xName, (i >= 0) ? "+" : "", i);
         toUpperCase(xName);
-        fprintf(output, "0x%08X:\t%-25s\tPC=0x%08X,MEM[0x%08X]=0x%08X\n", pcAntigo, instrucao, R[29], spAntigo, MEM32[R[30] >> 2]);
-
+        fprintf(output, "0x%08X:\t%-25s\tPC=0x%08X,MEM[0x%08X]=0x%08X\n", oldPC, instruction, R[29], oldSP, MEM32[R[30] >> 2]);
+        
         R[29] -= 4;
-        // SP = SP - 4     (SP = endereço de pilha)
         R[30] -= 4;
         break;
       case 0b111001:
-        // call (tipo S) - chamada de sub-rotina, considerando o endereço da próxima instrução da memória
-        sTypeInstruction(&pcAntigo, R, &i);
-        spAntigo = R[30];
-
-        // MEM[SP] = PC + 4
+        // call (S type)
+        STypeInstruction(&oldPC, R, &i);
+        oldSP = R[30];
+        
         MEM32[R[30] >> 2] = R[29] + 4;
-        // PC = PC + 4 + (i << 2)
         R[29] += i << 2;
 
-        sprintf(instrucao, "call %i", i);
-        fprintf(output, "0x%08X:\t%-25s\tPC=0x%08X,MEM[0x%08X]=0x%08X\n", pcAntigo, instrucao, (R[29] + 4), spAntigo, MEM32[R[30] >> 2]);
+        sprintf(instruction, "call %i", i);
+        fprintf(output, "0x%08X:\t%-25s\tPC=0x%08X,MEM[0x%08X]=0x%08X\n", oldPC, instruction, (R[29] + 4), oldSP, MEM32[R[30] >> 2]);
 
-        // SP = SP - 4     (SP = endereço de pilha)
         R[30] -= 4;
         break;
       case 0b011111:
-        // ret - operação de retorno de sub-rotina
+        // ret
         R[29] = R[29] << 2;
-        pcAntigo = R[29];
-        spAntigo = R[30] + 4;
+        oldPC = R[29];
+        oldSP = R[30] + 4;
 
-        // SP = SP + 4
         R[30] += 4;
-        // PC = MEM[SP]
         R[29] = MEM32[R[30] >> 2];
 
-        sprintf(instrucao, "ret");
-        fprintf(output, "0x%08X:\t%-25s\tPC=MEM[0x%08X]=0x%08X\n", pcAntigo, instrucao, R[30], MEM32[R[30] >> 2]);
+        sprintf(instruction, "ret");
+        fprintf(output, "0x%08X:\t%-25s\tPC=MEM[0x%08X]=0x%08X\n", oldPC, instruction, R[30], MEM32[R[30] >> 2]);
 
         R[29] -= 4;
         break;
       case 0b001010:
-        // push - operação de empilhamento
-        // i = v, w, x, y, z, o i receberá o valor da primeira variável que for diferente de 0
-        uTypeInstructionZXYVW(R, &z, &x, &y, &v, &w);
-        spAntigo = R[30];
+        // push
+        UTypeInstructionZXYVW(R, &z, &x, &y, &v, &w);
+        oldSP = R[30];
         temp[0] = v;
         temp[1] = w;
         temp[2] = x;
         temp[3] = y;
         temp[4] = z;
 
-        if (temp[0] == 0) sprintf(instrucao, "push -");
+        if (temp[0] == 0) sprintf(instruction, "push -");
         else {
           MEM32[R[30] >> 2] = R[v];
           R[30] -= 4;
           formatR(RName, v);
-          sprintf(instrucao, "push %s", RName);
+          sprintf(instruction, "push %s", RName);
 
           toUpperCase(RName);
           sprintf(registers, "%s", RName);
@@ -976,11 +862,11 @@ int main (int argc, char* argv[]) {
               char hex[11];
               formatR(RName, r);
 
-              strcat(instrucao, ",");
-              strcat(instrucao, RName);
+              strcat(instruction, ",");
+              strcat(instruction, RName);
 
               toUpperCase(RName);
-
+              
               strcat(registers, ",");
               strcat(registers, RName);
               sprintf(hex, "0x%08X", R[r]);
@@ -989,25 +875,24 @@ int main (int argc, char* argv[]) {
             }
         }
 
-        fprintf(output, "0x%08X:\t%-25s\tMEM[0x%08X]{%s}={%s}\n", R[29], instrucao, spAntigo, hexadecimals, registers);
+        fprintf(output, "0x%08X:\t%-25s\tMEM[0x%08X]{%s}={%s}\n", R[29], instruction, oldSP, hexadecimals, registers);
         break;
       case 0b001011:
-        // pop - operação de desempilhamento
-        // i = v, w, x, y, z, o i receberá o valor da primeira variável que for diferente de 0
-        uTypeInstructionZXYVW(R, &z, &x, &y, &v, &w);
-        spAntigo = R[30];
+        // pop
+        UTypeInstructionZXYVW(R, &z, &x, &y, &v, &w);
+        oldSP = R[30];
         temp[0] = v;
         temp[1] = w;
         temp[2] = x;
         temp[3] = y;
         temp[4] = z;
 
-        if (temp[0] == 0) sprintf(instrucao, "pop -");
+        if (temp[0] == 0) sprintf(instruction, "pop -");
         else {
           R[30] += 4;
           R[v] = MEM32[R[30] >> 2];
           formatR(RName, v);
-          sprintf(instrucao, "pop %s", RName);
+          sprintf(instruction, "pop %s", RName);
 
           toUpperCase(RName);
           sprintf(registers, "%s", RName);
@@ -1023,11 +908,11 @@ int main (int argc, char* argv[]) {
               char hex[11];
               formatR(RName, r);
 
-              strcat(instrucao, ",");
-              strcat(instrucao, RName);
+              strcat(instruction, ",");
+              strcat(instruction, RName);
 
               toUpperCase(RName);
-
+              
               strcat(registers, ",");
               strcat(registers, RName);
               sprintf(hex, "0x%08X", R[r]);
@@ -1036,14 +921,13 @@ int main (int argc, char* argv[]) {
             }
         }
 
-        fprintf(output, "0x%08X:\t%-25s\t{%s}=MEM[0x%08X]{%s}\n", R[29], instrucao, registers, spAntigo, hexadecimals);
+        fprintf(output, "0x%08X:\t%-25s\t{%s}=MEM[0x%08X]{%s}\n", R[29], instruction, registers, oldSP, hexadecimals);
         break;
       default:
         fprintf(output, "[INVALID INSTRUCTION @ 0x%08X]\n", R[29]);
-        execucao = 0;
+        running = 0;
         break;
     }
-    // Próxima instrução => PC = PC + 4;
     R[29] = (R[29] + 4) >> 2;
   }
   fprintf(output, "[END OF SIMULATION]\n");
@@ -1069,9 +953,9 @@ int64_t signalExtension64 (int number) {
   return (int64_t) number;
 }
 
-void uTypeInstructionZXYVW (uint32_t* R, uint8_t* z, uint8_t* x, uint8_t* y, uint8_t* v, uint8_t* w) {
+void UTypeInstructionZXYVW (uint32_t* R, uint8_t* z, uint8_t* x, uint8_t* y, uint8_t* v, uint8_t* w) {
   R[29] = R[29] << 2;
-
+  
   *z = (R[28] & 0x03E00000) >> 21;
   *x = (R[28] & 0x001F0000) >> 16;
   *y = (R[28] & 0x0000F800) >> 11;
@@ -1079,50 +963,61 @@ void uTypeInstructionZXYVW (uint32_t* R, uint8_t* z, uint8_t* x, uint8_t* y, uin
   *w = R[28] & 0x0000001F;
 }
 
-void uTypeInstructionZXYL (uint32_t* R, uint8_t* z, uint8_t* x, uint8_t* y, uint8_t* l) {
+void UTypeInstructionZXYL (uint32_t* R, uint8_t* z, uint8_t* x, uint8_t* y, uint8_t* l) {
   R[29] = R[29] << 2;
-
+  
   *z = (R[28] & 0x03E00000) >> 21;
   *x = (R[28] & 0x001F0000) >> 16;
   *y = (R[28] & 0x0000F800) >> 11;
   *l = (R[28] & 0x0000001F);
 }
 
-void uTypeInstructionZXY (uint32_t* R, uint8_t* z, uint8_t* x, uint8_t* y) {
+void UTypeInstructionZXY (uint32_t* R, uint8_t* z, uint8_t* x, uint8_t* y) {
   R[29] = R[29] << 2;
-
+  
   *z = (R[28] & 0x03E00000) >> 21;
   *x = (R[28] & 0x001F0000) >> 16;
   *y = (R[28] & 0x0000F800) >> 11;
 }
 
-void uTypeInstructionZX (uint32_t* R, uint8_t* z, uint8_t* x) {
+void UTypeInstructionZX (uint32_t* R, uint8_t* z, uint8_t* x) {
   R[29] = R[29] << 2;
 
   *z = (R[28] & 0x03E00000) >> 21;
   *x = (R[28] & 0x001F0000) >> 16;
 }
 
-void uTypeInstructionXY (uint32_t* R, uint8_t* x, uint8_t* y) {
+void UTypeInstructionXY (uint32_t* R, uint8_t* x, uint8_t* y) {
   R[29] = R[29] << 2;
-
+  
   *x = (R[28] & 0x001F0000) >> 16;
   *y = (R[28] & 0x0000F800) >> 11;
 }
 
-void fTypeInstructionZXI (uint32_t* R, uint8_t* z, uint8_t* x, int32_t* i) {
+void FTypeInstructionZXI (uint32_t* R, uint8_t* z, uint8_t* x, int32_t* i) {
   R[29] = R[29] << 2;
 
   *z = (R[28] & 0x03E00000) >> 21;
   *x = (R[28] & 0x001F0000) >> 16;
   *i = (R[28] & 0x0000FFFF);
-
+  
   if ((*i >> 15) == 0b1)
     *i += 0xFFFF0000;
 }
 
-void fTypeInstructionXI (uint32_t* R, uint8_t* x, int32_t* i) {
+void FTypeInstructionXI (uint32_t* R, uint8_t* x, int32_t* i) {
   R[29] = R[29] << 2;
+
+  *x = (R[28] & 0x001F0000) >> 16;
+  *i = (R[28] & 0x0000FFFF);
+  
+  if ((*i >> 15) == 0b1)
+    *i += 0xFFFF0000;
+}
+
+void FTypeInstructionPCXI (uint32_t* oldPC, uint32_t* R, uint8_t* x, int32_t* i) {
+  R[29] = R[29] << 2;
+  *oldPC = R[29];
 
   *x = (R[28] & 0x001F0000) >> 16;
   *i = (R[28] & 0x0000FFFF);
@@ -1131,23 +1026,12 @@ void fTypeInstructionXI (uint32_t* R, uint8_t* x, int32_t* i) {
     *i += 0xFFFF0000;
 }
 
-void fTypeInstructionPCXI (uint32_t* pcAntigo, uint32_t* R, uint8_t* x, int32_t* i) {
+void STypeInstruction (uint32_t* oldPC, uint32_t* R, int32_t* i) {
   R[29] = R[29] << 2;
-  *pcAntigo = R[29];
-
-  *x = (R[28] & 0x001F0000) >> 16;
-  *i = (R[28] & 0x0000FFFF);
-
-  if ((*i >> 15) == 0b1)
-    *i += 0xFFFF0000;
-}
-
-void sTypeInstruction (uint32_t* pcAntigo, uint32_t* R, int32_t* i) {
-  R[29] = R[29] << 2;
-  *pcAntigo = R[29];
-
+  *oldPC = R[29];
+  
   *i = R[28] & 0x03FFFFFF;
-
+  
   if ((*i >> 25) == 0b1)
     *i += 0xFC000000;
 }
