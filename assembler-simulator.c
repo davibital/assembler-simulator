@@ -1146,44 +1146,6 @@ void sTypeInstruction (uint32_t* pcAntigo, uint32_t* R, int32_t* i) {
     *i += 0xFC000000;
 }
 
-void popInstruction (uint32_t* R, uint32_t* MEM32, char instrucao[], uint8_t v, uint8_t w, uint8_t x, uint8_t y, uint8_t z) {
-  uint8_t temp[] = {v, w, x, y, z};
-  char RName[5];
-
-  if (temp[0] == 0) sprintf(instrucao, "pop -");
-  else {
-    R[30] += 4;
-    R[v] = MEM32[R[30] >> 2];
-
-    char hexadecimals[54];
-    char registers[20];
-    formatR(RName, R[0]);
-    sprintf(instrucao, "pop %s", RName);
-
-    toUpperCase(RName);
-    sprintf(registers, "%s", RName);
-    sprintf(hexadecimals, "0x%08X", R[0]);
-
-  for (int i = 1; i < 5; i++)
-    if (temp[i] == 0) break;
-    else {
-      char hex[11];
-      formatR(RName, R[i]);
-
-      strcat(instrucao, ",");
-      strcat(instrucao, RName);
-
-      toUpperCase(RName);
-      
-      strcat(registers, ",");
-      strcat(registers, RName);
-      sprintf(hex, "0x%08X", R[i]);
-      strcat(hexadecimals, ",");
-      strcat(hexadecimals, hex);
-    }
-  }
-}
-
 void updateSR (uint32_t* SR, char field[], int condition) {
 
     if (strcmp(field, "ZN") == 0) {
