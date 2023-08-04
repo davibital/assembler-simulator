@@ -34,6 +34,8 @@ void formatR (char RName[5], uint8_t R);
 
 void toUpperCase(char* str);
 
+void softwareInterruption(uint32_t* R, uint32_t* MEM, uint8_t* hadInterruption);
+
 int main (int argc, char* argv[]) {
   FILE* input = fopen(argv[1], "r");
   FILE* output = fopen(argv[2], "w");
@@ -57,6 +59,7 @@ int main (int argc, char* argv[]) {
     uint32_t oldPC = 0, oldSP = 0, xyl = 0;
     char hexadecimals[55] = {0};
     char registers[20] = {0};
+    uint8_t hadInterruption = 0;
     
     uint64_t uresult = 0;
     int64_t result = 0;
@@ -238,7 +241,22 @@ int main (int argc, char* argv[]) {
             break;
           case 0b100:
             // div
-            if (R[y] == 0) updateSR(&R[31], "ZD", R[y] == 0);
+            formatR(zName, z);
+            formatR(xName, x);
+            formatR(yName, y);
+            formatR(lName, l);
+            
+            sprintf(instruction, "div %s,%s,%s,%s", lName, zName, xName, yName);
+
+            if (R[y] == 0) {
+              updateSR(&R[31], "ZD", R[y] == 0);
+              if ((R[31] & 0x00000002) != 0) {
+                softwareInterruption(R, MEM32, &hadInterruption);
+                R[26] = 0;
+                R[27] = R[29];
+                R[29] = 0x00000004;
+              }
+            }
             else {
               if (l != 0) R[l] = R[x] % R[y];
               if (z != 0) R[z] = R[x] / R[y];
@@ -248,19 +266,13 @@ int main (int argc, char* argv[]) {
               updateSR(&R[31], "CY", R[l] != 0);
             }
 
-            formatR(zName, z);
-            formatR(xName, x);
-            formatR(yName, y);
-            formatR(lName, l);
-            
-            sprintf(instruction, "div %s,%s,%s,%s", lName, zName, xName, yName);
 
             toUpperCase(zName);
             toUpperCase(xName);
             toUpperCase(yName);
             toUpperCase(lName);
 
-            fprintf(output, "0x%08X:\t%-25s\t%s=%s%%%s=0x%08X,%s=%s/%s=0x%08X,SR=0x%08X\n", R[29], instruction, lName, xName, yName, R[l], zName, xName, yName, R[z], R[31]);
+            fprintf(output, "0x%08X:\t%-25s\t%s=%s%%%s=0x%08X,%s=%s/%s=0x%08X,SR=0x%08X\n%s", R[29], instruction, lName, xName, yName, R[l], zName, xName, yName, R[z], R[31], hadInterruption ? "[SOFTWARE INTERRUPTION]\n" : "");
             break;
           case 0b101:
             // srl
@@ -284,9 +296,24 @@ int main (int argc, char* argv[]) {
             break;
           case 0b110:
             // divs
+            formatR(zName, z);
+            formatR(xName, x);
+            formatR(yName, y);
+            formatR(lName, l);
+
+            sprintf(instruction, "divs %s,%s,%s,%s", lName, zName, xName, yName);
+
             int32_t divs = 0;
             int32_t mods = 0;
-            if (R[y] == 0) updateSR(&R[31], "ZD", R[y] == 0);
+            if (R[y] == 0) {
+              updateSR(&R[31], "ZD", R[y] == 0);
+              if ((R[31] & 0x00000002) != 0) {
+                softwareInterruption(R, MEM32, &hadInterruption);
+                R[26] = 0;
+                R[27] = R[29];
+                R[29] = 0x00000004;
+              }
+            }
             else {
               mods = (int32_t)(R[x]) % (int32_t)(R[y]);
               divs = (int32_t)(R[x]) / (int32_t)(R[y]);
@@ -299,17 +326,11 @@ int main (int argc, char* argv[]) {
               updateSR(&R[31], "ZN", R[z] == 0);
             }
 
-            formatR(zName, z);
-            formatR(xName, x);
-            formatR(yName, y);
-            formatR(lName, l);
-
-            sprintf(instruction, "divs %s,%s,%s,%s", lName, zName, xName, yName);
             toUpperCase(zName);
             toUpperCase(xName);
             toUpperCase(yName);
             toUpperCase(lName);
-            fprintf(output, "0x%08X:\t%-25s\t%s=%s%%%s=0x%08X,%s=%s/%s=0x%08X,SR=0x%08X\n", R[29], instruction, lName, xName, yName, R[l], zName, xName, yName, R[z], R[31]);
+            fprintf(output, "0x%08X:\t%-25s\t%s=%s%%%s=0x%08X,%s=%s/%s=0x%08X,SR=0x%08X\n%s", R[29], instruction, lName, xName, yName, R[l], zName, xName, yName, R[z], R[31], hadInterruption ? "[SOFTWARE INTERRUPTION]\n" : "");
             break;
           case 0b111:
             // sra
@@ -494,8 +515,20 @@ int main (int argc, char* argv[]) {
       case 0b010101:
         // divi
         FTypeInstructionZXI(R, &z, &x, &i);
+        formatR(zName, z);
+        formatR(xName, x);
 
-        if (i == 0) updateSR(&R[31], "ZD", i == 0);
+        sprintf(instruction, "divi %s,%s,%i", zName, xName, i);
+
+        if (i == 0) {
+          updateSR(&R[31], "ZD", R[y] == 0);
+          if ((R[31] & 0x00000002) != 0) {
+            softwareInterruption(R, MEM32, &hadInterruption);
+            R[26] = 0;
+            R[27] = R[29];
+            R[29] = 0x00000004;
+          }
+        }
         else {
           if (z != 0) R[z] = (int32_t)R[x] / (int32_t)i;
 
@@ -504,13 +537,9 @@ int main (int argc, char* argv[]) {
           updateSR(&R[31], "ZN", R[z] == 0);
         }
         
-        formatR(zName, z);
-        formatR(xName, x);
-
-        sprintf(instruction, "divi %s,%s,%i", zName, xName, i);
         toUpperCase(zName);
         toUpperCase(xName);
-        fprintf(output, "0x%08X:\t%-25s\t%s=%s/0x%08X=0x%08X,SR=0x%08X\n", R[29], instruction, zName, xName, i, R[z], R[31]);
+        fprintf(output, "0x%08X:\t%-25s\t%s=%s/0x%08X=0x%08X,SR=0x%08X\n%s", R[29], instruction, zName, xName, i, R[z], R[31], hadInterruption ? "[SOFTWARE INTERRUPTION]\n" : "");
         break;
       case 0b010110:
         // modi
@@ -780,12 +809,23 @@ int main (int argc, char* argv[]) {
       case 0b111111:
         // int
         R[29] = R[29] << 2;
-
         i = R[28] & 0x03FFFFFF;
-        if (i == 0) running = 0;
+        oldPC = R[29];
         
         sprintf(instruction, "int %u", i);
-        fprintf(output, "0x%08X:\t%-25s\tCR=0x00000000,PC=0x00000000\n", R[29], instruction);
+
+        if (i == 0) {
+          R[29] = 0x00000000 - 4;
+          running = 0;
+        }
+        else {
+          softwareInterruption(R, MEM32, &hadInterruption);
+          R[26] = i;
+          R[27] = R[29];
+          R[29] = 0x00000008;
+        }
+
+        fprintf(output, "0x%08X:\t%-25s\tCR=0x%08X,PC=0x%08X\n%s", oldPC, instruction, R[26], (R[29] + 4), hadInterruption ? "[SOFTWARE INTERRUPTION]\n" : "");
         break;
       case 0b011110:
         // call (F type)
@@ -821,7 +861,6 @@ int main (int argc, char* argv[]) {
         // ret
         R[29] = R[29] << 2;
         oldPC = R[29];
-        oldSP = R[30] + 4;
 
         R[30] += 4;
         R[29] = MEM32[R[30] >> 2];
@@ -923,9 +962,57 @@ int main (int argc, char* argv[]) {
 
         fprintf(output, "0x%08X:\t%-25s\t{%s}=MEM[0x%08X]{%s}\n", R[29], instruction, registers, oldSP, hexadecimals);
         break;
+      case 0b100000:
+        // reti
+        R[29] = R[29] << 2;
+        oldPC = R[29];
+
+        R[30] += 4;
+        R[27] = MEM32[R[30] >> 2];
+        R[30] += 4;
+        R[26] = MEM32[R[30] >> 2];
+        R[30] += 4;
+        R[29] = MEM32[R[30] >> 2];
+
+        sprintf(instruction, "reti");
+        fprintf(output, "0x%08X:\t%-25s\tIPC=MEM[0x%08X]=0x%08X,CR=MEM[0x%08X]=0x%08X,PC=MEM[0x%08X]=0x%08X\n", oldPC, instruction, (R[30] - 8), R[27], (R[30] - 4), R[26], R[30], R[29]);
+
+        R[29] -= 4;
+        break;
+      case 0b100001:
+        FTypeInstructionZXI(R, &z, &x, &i);
+        if (i == 0) {
+          // cbr
+
+          R[z] = R[z] & ~(0b1 << x);
+
+          formatR(zName, z);
+          sprintf(instruction, "cbr %s[%u]", zName, x);
+
+          toUpperCase(zName);
+          fprintf(output, "0x%08X:\t%-25s\t%s=0x%08X\n", R[29], instruction, zName, R[z]);
+        } else {
+          // sbr
+          R[z] = R[z] | (0b1 << x);
+
+          formatR(zName, z);
+          sprintf(instruction, "sbr %s[%u]", zName, x);
+
+          toUpperCase(zName);
+          fprintf(output, "0x%08X:\t%-25s\t%s=0x%08X\n", R[29], instruction, zName, R[z]);
+        }
+        break;
       default:
+        // invalid instruction
+        R[29] = R[29] << 2;
         fprintf(output, "[INVALID INSTRUCTION @ 0x%08X]\n", R[29]);
-        running = 0;
+        fprintf(output, "[SOFTWARE INTERRUPTION]\n");
+        softwareInterruption(R, MEM32, &hadInterruption);
+
+        updateSR(&R[31], "IV", 1);
+        R[26] = operationCode;
+        R[27] = R[29];
+        R[29] = 0x00000000;
         break;
     }
     R[29] = (R[29] + 4) >> 2;
@@ -1058,6 +1145,16 @@ void updateSR (uint32_t* SR, char field[], int condition) {
         *SR = *SR | 0x00000008;
       else
         *SR = *SR & (~0x00000008);
+    } else if (strcmp(field, "IV") == 0) {
+      if (condition == 1)
+        *SR = *SR | 0x00000004;
+      else
+        *SR = *SR & (~0x00000004);
+    } else if (strcmp(field, "IE") == 0) {
+      if (condition == 1)
+        *SR = *SR | 0x00000002;
+      else
+        *SR = *SR & (~0x00000002);
     } else if (strcmp(field, "CY") == 0) {
       if (condition == 1)
         *SR = *SR | 0x00000001;
@@ -1097,4 +1194,14 @@ void toUpperCase(char* str) {
   for (uint8_t i = 0; i < strlen(str); i++) {
     str[i] = toupper(str[i]);
   }
+}
+
+void softwareInterruption(uint32_t* R, uint32_t* MEM, uint8_t* hadInterruption) {
+  *hadInterruption = 1;
+  MEM[R[30] >> 2] = R[29] + 4;
+  R[30] -= 4;
+  MEM[R[30] >> 2] = R[26];
+  R[30] -= 4;
+  MEM[R[30] >> 2] = R[27];
+  R[30] -= 4;
 }
