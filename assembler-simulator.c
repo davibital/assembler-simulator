@@ -34,7 +34,7 @@ void formatR (char RName[5], uint8_t R);
 
 void toUpperCase(char* str);
 
-void softwareInterruption(uint32_t* R, uint32_t* MEM, uint8_t* hadInterruption);
+void softwareInterruption(uint32_t* R, uint32_t* MEM, uint8_t* hadInterruption, uint32_t i, char interruptionType[]);
 
 int main (int argc, char* argv[]) {
   FILE* input = fopen(argv[1], "r");
@@ -250,12 +250,8 @@ int main (int argc, char* argv[]) {
 
             if (R[y] == 0) {
               updateSR(&R[31], "ZD", R[y] == 0);
-              if ((R[31] & 0x00000002) != 0) {
-                softwareInterruption(R, MEM32, &hadInterruption);
-                R[26] = 0;
-                R[27] = R[29];
-                R[29] = 0x00000004;
-              }
+              if ((R[31] & 0x00000002) != 0)
+                softwareInterruption(R, MEM32, &hadInterruption, i, "zd");
             }
             else {
               if (l != 0) R[l] = R[x] % R[y];
@@ -305,14 +301,11 @@ int main (int argc, char* argv[]) {
 
             int32_t divs = 0;
             int32_t mods = 0;
+
             if (R[y] == 0) {
               updateSR(&R[31], "ZD", R[y] == 0);
-              if ((R[31] & 0x00000002) != 0) {
-                softwareInterruption(R, MEM32, &hadInterruption);
-                R[26] = 0;
-                R[27] = R[29];
-                R[29] = 0x00000004;
-              }
+              if ((R[31] & 0x00000002) != 0)
+                softwareInterruption(R, MEM32, &hadInterruption, i, "zd");
             }
             else {
               mods = (int32_t)(R[x]) % (int32_t)(R[y]);
@@ -520,14 +513,10 @@ int main (int argc, char* argv[]) {
 
         sprintf(instruction, "divi %s,%s,%i", zName, xName, i);
 
-        if (i == 0) {
+        if (R[y] == 0) {
           updateSR(&R[31], "ZD", R[y] == 0);
-          if ((R[31] & 0x00000002) != 0) {
-            softwareInterruption(R, MEM32, &hadInterruption);
-            R[26] = 0;
-            R[27] = R[29];
-            R[29] = 0x00000004;
-          }
+          if ((R[31] & 0x00000002) != 0)
+            softwareInterruption(R, MEM32, &hadInterruption, i, "zd");
         }
         else {
           if (z != 0) R[z] = (int32_t)R[x] / (int32_t)i;
@@ -818,12 +807,7 @@ int main (int argc, char* argv[]) {
           R[29] = 0x00000000 - 4;
           running = 0;
         }
-        else {
-          softwareInterruption(R, MEM32, &hadInterruption);
-          R[26] = i;
-          R[27] = R[29];
-          R[29] = 0x00000008;
-        }
+        else softwareInterruption(R, MEM32, &hadInterruption, i, "int");
 
         fprintf(output, "0x%08X:\t%-25s\tCR=0x%08X,PC=0x%08X\n%s", oldPC, instruction, R[26], (R[29] + 4), hadInterruption ? "[SOFTWARE INTERRUPTION]\n" : "");
         break;
@@ -1005,16 +989,13 @@ int main (int argc, char* argv[]) {
       default:
         // invalid instruction
         R[29] = R[29] << 2;
-        fprintf(output, "[INVALID INSTRUCTION @ 0x%08X]\n", R[29]);
-        fprintf(output, "[SOFTWARE INTERRUPTION]\n");
-        softwareInterruption(R, MEM32, &hadInterruption);
-
         updateSR(&R[31], "IV", 1);
-        R[26] = operationCode;
-        R[27] = R[29];
-        R[29] = 0x00000000;
+        fprintf(output, "[INVALID INSTRUCTION @ 0x%08X]\n", R[29]);
+        softwareInterruption(R, MEM32, &hadInterruption, i, "iv");
+        fprintf(output, "[SOFTWARE INTERRUPTION]\n");
         break;
     }
+
     R[29] = (R[29] + 4) >> 2;
   }
   fprintf(output, "[END OF SIMULATION]\n");
@@ -1196,7 +1177,7 @@ void toUpperCase(char* str) {
   }
 }
 
-void softwareInterruption(uint32_t* R, uint32_t* MEM, uint8_t* hadInterruption) {
+void softwareInterruption(uint32_t* R, uint32_t* MEM, uint8_t* hadInterruption, uint32_t i, char interruptionType[]) {
   *hadInterruption = 1;
   MEM[R[30] >> 2] = R[29] + 4;
   R[30] -= 4;
@@ -1204,4 +1185,23 @@ void softwareInterruption(uint32_t* R, uint32_t* MEM, uint8_t* hadInterruption) 
   R[30] -= 4;
   MEM[R[30] >> 2] = R[27];
   R[30] -= 4;
+
+  // zero division interruption
+  if (strcmp(interruptionType, "zd") == 0) {
+    R[26] = 0;
+    R[27] = R[29];
+    R[29] = 0x00000004;
+  }
+  // invalid instruction
+  else if (strcmp(interruptionType, "iv") == 0) {
+    R[26] = (R[28] & 0xFC000000) >> 26;
+    R[27] = R[29];
+    R[29] = 0x00000000;
+  }
+  // interruption instruction
+  else if (strcmp(interruptionType, "int") == 0) {
+    R[26] = i;
+    R[27] = R[29];
+    R[29] = 0x00000008;
+  }
 }
