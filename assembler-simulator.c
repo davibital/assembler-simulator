@@ -5,6 +5,7 @@
 #include <stdio.h>
 #include <ctype.h>
 #include <string.h>
+#include <stdbool.h>
 
 void getFileInstructions(FILE* input, uint32_t* MEM);
 
@@ -34,13 +35,20 @@ void formatR (char RName[5], uint8_t R);
 
 void toUpperCase(char* str);
 
-void softwareInterruption(uint32_t* R, uint32_t* MEM, uint8_t* hadInterruption, uint32_t i, char interruptionType[]);
+void softwareInterruption(uint32_t* R, uint32_t* MEM, uint32_t i, char interruptionType[]);
+
+void hardwareInterruption(uint32_t* R, uint32_t* MEM, char interruptionType[]);
 
 int main (int argc, char* argv[]) {
   FILE* input = fopen(argv[1], "r");
   FILE* output = fopen(argv[2], "w");
 
   uint32_t R[32] = {0};
+  uint32_t watchdog;
+  bool hadHardwareInterruption = false;
+  bool hadSoftwareInterruption = false;
+  char interruptionType[4] = {0};
+  int32_t i = 0;
 
   uint32_t* MEM32 = (uint32_t*)(calloc(8, 1024));
  
@@ -50,16 +58,30 @@ int main (int argc, char* argv[]) {
   uint8_t running = 1;
 
   while (running) {
+
+    if ((R[31] & 0x00000002) != 0) {
+      if (hadHardwareInterruption) {
+        hardwareInterruption(R, MEM32, interruptionType);
+        fprintf(output, "[HARDWARE INTERRUPTION %s]\n", &interruptionType[1]);
+        hadHardwareInterruption = false;
+        strcpy(interruptionType, "");
+      } else if (hadSoftwareInterruption) {
+        softwareInterruption(R, MEM32, i, interruptionType);
+        fprintf(output, "[SOFTWARE INTERRUPTION]\n");
+        hadSoftwareInterruption = false;
+        strcpy(interruptionType, "");
+      }
+    }
     
     char instruction[30] = {0};
 
     uint8_t z = 0, x = 0, y = 0, l = 0, v = 0, w = 0, temp[5];
     char RName[5], zName[5], xName[5], yName[5], lName[5];
-    int32_t i = 0, xxyl = 0;
+    int32_t xxyl = 0;
     uint32_t oldPC = 0, oldSP = 0, xyl = 0;
     char hexadecimals[55] = {0};
     char registers[20] = {0};
-    uint8_t hadInterruption = 0;
+    i = 0;
     
     uint64_t uresult = 0;
     int64_t result = 0;
@@ -250,8 +272,10 @@ int main (int argc, char* argv[]) {
 
             if (R[y] == 0) {
               updateSR(&R[31], "ZD", R[y] == 0);
-              if ((R[31] & 0x00000002) != 0)
-                softwareInterruption(R, MEM32, &hadInterruption, i, "zd");
+              if ((R[31] & 0x00000002) != 0) {
+                hadSoftwareInterruption = true;
+                sprintf(interruptionType, "zd");
+              }
             }
             else {
               if (l != 0) R[l] = R[x] % R[y];
@@ -268,7 +292,7 @@ int main (int argc, char* argv[]) {
             toUpperCase(yName);
             toUpperCase(lName);
 
-            fprintf(output, "0x%08X:\t%-25s\t%s=%s%%%s=0x%08X,%s=%s/%s=0x%08X,SR=0x%08X\n%s", R[29], instruction, lName, xName, yName, R[l], zName, xName, yName, R[z], R[31], hadInterruption ? "[SOFTWARE INTERRUPTION]\n" : "");
+            fprintf(output, "0x%08X:\t%-25s\t%s=%s%%%s=0x%08X,%s=%s/%s=0x%08X,SR=0x%08X\n", R[29], instruction, lName, xName, yName, R[l], zName, xName, yName, R[z], R[31]);
             break;
           case 0b101:
             // srl
@@ -304,8 +328,10 @@ int main (int argc, char* argv[]) {
 
             if (R[y] == 0) {
               updateSR(&R[31], "ZD", R[y] == 0);
-              if ((R[31] & 0x00000002) != 0)
-                softwareInterruption(R, MEM32, &hadInterruption, i, "zd");
+              if ((R[31] & 0x00000002) != 0) {
+                hadSoftwareInterruption = true;
+                sprintf(interruptionType, "zd");
+              }
             }
             else {
               mods = (int32_t)(R[x]) % (int32_t)(R[y]);
@@ -323,7 +349,7 @@ int main (int argc, char* argv[]) {
             toUpperCase(xName);
             toUpperCase(yName);
             toUpperCase(lName);
-            fprintf(output, "0x%08X:\t%-25s\t%s=%s%%%s=0x%08X,%s=%s/%s=0x%08X,SR=0x%08X\n%s", R[29], instruction, lName, xName, yName, R[l], zName, xName, yName, R[z], R[31], hadInterruption ? "[SOFTWARE INTERRUPTION]\n" : "");
+            fprintf(output, "0x%08X:\t%-25s\t%s=%s%%%s=0x%08X,%s=%s/%s=0x%08X,SR=0x%08X\n", R[29], instruction, lName, xName, yName, R[l], zName, xName, yName, R[z], R[31]);
             break;
           case 0b111:
             // sra
@@ -515,8 +541,10 @@ int main (int argc, char* argv[]) {
 
         if (R[y] == 0) {
           updateSR(&R[31], "ZD", R[y] == 0);
-          if ((R[31] & 0x00000002) != 0)
-            softwareInterruption(R, MEM32, &hadInterruption, i, "zd");
+          if ((R[31] & 0x00000002) != 0) {
+            hadSoftwareInterruption = true;
+            sprintf(interruptionType, "zd");
+          }
         }
         else {
           if (z != 0) R[z] = (int32_t)R[x] / (int32_t)i;
@@ -528,7 +556,7 @@ int main (int argc, char* argv[]) {
         
         toUpperCase(zName);
         toUpperCase(xName);
-        fprintf(output, "0x%08X:\t%-25s\t%s=%s/0x%08X=0x%08X,SR=0x%08X\n%s", R[29], instruction, zName, xName, i, R[z], R[31], hadInterruption ? "[SOFTWARE INTERRUPTION]\n" : "");
+        fprintf(output, "0x%08X:\t%-25s\t%s=%s/0x%08X=0x%08X,SR=0x%08X\n", R[29], instruction, zName, xName, i, R[z], R[31]);
         break;
       case 0b010110:
         // modi
@@ -650,7 +678,15 @@ int main (int argc, char* argv[]) {
         // s32
         FTypeInstructionZXI(R, &z, &x, &i);
 
-        MEM32[(R[x] + i) << 2] = R[z];
+        switch((R[x] + i) << 2) {
+          case 0x80808080:
+            watchdog = R[z];
+            break;
+          default:
+            MEM32[(R[x] + i) << 2] = R[z];
+            break;
+        }
+
 
         formatR(zName, z);
         formatR(xName, x);
@@ -807,9 +843,13 @@ int main (int argc, char* argv[]) {
           R[29] = 0x00000000 - 4;
           running = 0;
         }
-        else softwareInterruption(R, MEM32, &hadInterruption, i, "int");
+        else {
+          R[29] = 0x0000000C - 4;
+          hadSoftwareInterruption = true;
+          sprintf(interruptionType, "int");
+        }
 
-        fprintf(output, "0x%08X:\t%-25s\tCR=0x%08X,PC=0x%08X\n%s", oldPC, instruction, R[26], (R[29] + 4), hadInterruption ? "[SOFTWARE INTERRUPTION]\n" : "");
+        fprintf(output, "0x%08X:\t%-25s\tCR=0x%08X,PC=0x%08X\n", oldPC, instruction, R[26], (R[29] + 4));
         break;
       case 0b011110:
         // call (F type)
@@ -991,9 +1031,18 @@ int main (int argc, char* argv[]) {
         R[29] = R[29] << 2;
         updateSR(&R[31], "IV", 1);
         fprintf(output, "[INVALID INSTRUCTION @ 0x%08X]\n", R[29]);
-        softwareInterruption(R, MEM32, &hadInterruption, i, "iv");
-        fprintf(output, "[SOFTWARE INTERRUPTION]\n");
+        hadSoftwareInterruption = true;
+        sprintf(interruptionType, "iv");
         break;
+    }
+
+    if (watchdog >> 31 == 0b1) {
+      if (watchdog << 1 == 0) {
+        hadHardwareInterruption = true;
+        sprintf(interruptionType, "h1");
+        watchdog = 0;
+      }
+      watchdog--;
     }
 
     R[29] = (R[29] + 4) >> 2;
@@ -1177,9 +1226,8 @@ void toUpperCase(char* str) {
   }
 }
 
-void softwareInterruption(uint32_t* R, uint32_t* MEM, uint8_t* hadInterruption, uint32_t i, char interruptionType[]) {
-  *hadInterruption = 1;
-  MEM[R[30] >> 2] = R[29] + 4;
+void softwareInterruption(uint32_t* R, uint32_t* MEM, uint32_t i, char interruptionType[]) {
+  MEM[R[30] >> 2] = R[29] + 1;
   R[30] -= 4;
   MEM[R[30] >> 2] = R[26];
   R[30] -= 4;
@@ -1190,7 +1238,7 @@ void softwareInterruption(uint32_t* R, uint32_t* MEM, uint8_t* hadInterruption, 
   if (strcmp(interruptionType, "zd") == 0) {
     R[26] = 0;
     R[27] = R[29];
-    R[29] = 0x00000004;
+    R[29] = 0x00000004 >> 2;
   }
   // invalid instruction
   else if (strcmp(interruptionType, "iv") == 0) {
@@ -1202,6 +1250,20 @@ void softwareInterruption(uint32_t* R, uint32_t* MEM, uint8_t* hadInterruption, 
   else if (strcmp(interruptionType, "int") == 0) {
     R[26] = i;
     R[27] = R[29];
-    R[29] = 0x00000008;
+    R[29] = 0x0000000C >> 2;
+  }
+}
+
+void hardwareInterruption(uint32_t* R, uint32_t* MEM, char interruptionType[]) {
+  MEM[R[30] >> 2] = R[29] + 1;
+  R[30] -= 4;
+  MEM[R[30] >> 2] = R[26];
+  R[30] -= 4;
+  MEM[R[30] >> 2] = R[27];
+  R[30] -= 4;
+
+  if (strcmp(interruptionType, "h1") == 0) {
+      R[26] = 0xE1AC04DA;
+      R[29] = 0x00000010 >> 2;
   }
 }
