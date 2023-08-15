@@ -8,8 +8,10 @@
 #include <stdbool.h>
 
 typedef struct InputOutputDevice {
+  uint8_t interruptionType;
   uint32_t interruptionCode;
-  uint32_t address;
+  uint32_t interruptionAddress;
+  uint32_t deviceAddress;
   uint32_t value;
 } InputOutputDevice;
 
@@ -43,7 +45,7 @@ void toUpperCase(char* str);
 
 void softwareInterruption(uint32_t* R, uint32_t* MEM, uint32_t i, char interruptionType[]);
 
-void hardwareInterruption(uint32_t* R, uint32_t* MEM, char interruptionType[]);
+void hardwareInterruption(uint32_t* R, uint32_t* MEM, InputOutputDevice device);
 
 int main (int argc, char* argv[]) {
   FILE* input = fopen(argv[1], "r");
@@ -52,9 +54,12 @@ int main (int argc, char* argv[]) {
   uint32_t R[32] = {0};
 
   InputOutputDevice watchdog;
+  watchdog.interruptionType = 1;
   watchdog.interruptionCode = 0xE1AC04DA;
-  watchdog.address = 0x80808080;
+  watchdog.interruptionAddress = 0x00000010;
+  watchdog.deviceAddress = 0x80808080;
   watchdog.value = 0;
+
   bool hadHardwareInterruption = false;
   bool hadSoftwareInterruption = false;
   char interruptionType[4] = {0};
@@ -71,8 +76,12 @@ int main (int argc, char* argv[]) {
 
     if ((R[31] & 0x00000002) != 0) {
       if (hadHardwareInterruption) {
-        hardwareInterruption(R, MEM32, interruptionType);
-        fprintf(output, "[HARDWARE INTERRUPTION %s]\n", &interruptionType[1]);
+
+        if (strcmp(interruptionType, "1") == 0)
+          hardwareInterruption(R, MEM32, watchdog);
+
+
+        fprintf(output, "[HARDWARE INTERRUPTION %s]\n", interruptionType);
         hadHardwareInterruption = false;
         strcpy(interruptionType, "");
       } else if (hadSoftwareInterruption) {
@@ -610,7 +619,7 @@ int main (int argc, char* argv[]) {
         FTypeInstructionZXI(R, &z, &x, &i);
         
         if (z != 0) {
-          if ((R[x] + i) >> 2 == watchdog.address)
+          if ((R[x] + i) >> 2 == watchdog.deviceAddress)
             R[z] = watchdog.value & 0x000000FF;
           else
             R[z] = MEM32[(R[x] + i) >> 2];
@@ -632,7 +641,7 @@ int main (int argc, char* argv[]) {
         FTypeInstructionZXI(R, &z, &x, &i);
 
         if (z != 0) {
-          if ((R[x] + i) >> 1 == watchdog.address)
+          if ((R[x] + i) >> 1 == watchdog.deviceAddress)
             R[z] = watchdog.value & 0x0000FFFF;
           else
             R[z] = MEM32[(R[x] + i) >> 1];
@@ -654,7 +663,7 @@ int main (int argc, char* argv[]) {
         FTypeInstructionZXI(R, &z, &x, &i);
 
         if (z != 0) {
-          if (R[x] + i == watchdog.address)
+          if (R[x] + i == watchdog.deviceAddress)
             R[z] = watchdog.value;
           else
             R[z] = MEM32[R[x] + i];
@@ -672,7 +681,7 @@ int main (int argc, char* argv[]) {
         // s8
         FTypeInstructionZXI(R, &z, &x, &i);
 
-        if ((R[x] + i) == watchdog.address)
+        if ((R[x] + i) == watchdog.deviceAddress)
           watchdog.value = R[z] & 0x000000FF;
         else
           MEM32[R[x] + i] = R[z] & 0x000000FF;
@@ -689,7 +698,7 @@ int main (int argc, char* argv[]) {
         // s16
         FTypeInstructionZXI(R, &z, &x, &i);
 
-        if ((R[x] + i) << 1 == watchdog.address)
+        if ((R[x] + i) << 1 == watchdog.deviceAddress)
           watchdog.value = R[z] & 0x0000FFFF;
         else
           MEM32[(R[x] + i) << 1] = R[z] & 0x0000FFFF;
@@ -706,7 +715,7 @@ int main (int argc, char* argv[]) {
         // s32
         FTypeInstructionZXI(R, &z, &x, &i);
 
-        if ((R[x] + i) << 2 == watchdog.address)
+        if ((R[x] + i) << 2 == watchdog.deviceAddress)
           watchdog.value = R[z];
         else
           MEM32[(R[x] + i) << 2] = R[z];
@@ -1062,7 +1071,7 @@ int main (int argc, char* argv[]) {
     if (watchdog.value >> 31 == 0b1) {
       if (watchdog.value << 1 == 0) {
         hadHardwareInterruption = true;
-        sprintf(interruptionType, "h1");
+        sprintf(interruptionType, "%d", watchdog.interruptionType);
         watchdog.value = 0;
       }
       watchdog.value--;
@@ -1277,16 +1286,14 @@ void softwareInterruption(uint32_t* R, uint32_t* MEM, uint32_t i, char interrupt
   }
 }
 
-void hardwareInterruption(uint32_t* R, uint32_t* MEM, char interruptionType[]) {
+void hardwareInterruption(uint32_t* R, uint32_t* MEM, InputOutputDevice device) {
   MEM[R[30] >> 2] = R[29] + 1;
   R[30] -= 4;
   MEM[R[30] >> 2] = R[26];
   R[30] -= 4;
   MEM[R[30] >> 2] = R[27];
   R[30] -= 4;
-
-  if (strcmp(interruptionType, "h1") == 0) {
-      R[26] = 0xE1AC04DA;
-      R[29] = 0x00000010 >> 2;
-  }
+  
+  R[26] = device.interruptionCode;
+  R[29] = device.interruptionAddress >> 2;
 }
