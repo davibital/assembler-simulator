@@ -7,6 +7,12 @@
 #include <string.h>
 #include <stdbool.h>
 
+typedef struct InputOutputDevice {
+  uint32_t interruptionCode;
+  uint32_t address;
+  uint32_t value;
+} InputOutputDevice;
+
 void getFileInstructions(FILE* input, uint32_t* MEM);
 
 int64_t signalExtension64 (int number);
@@ -44,7 +50,11 @@ int main (int argc, char* argv[]) {
   FILE* output = fopen(argv[2], "w");
 
   uint32_t R[32] = {0};
-  uint32_t watchdog;
+
+  InputOutputDevice watchdog;
+  watchdog.interruptionCode = 0xE1AC04DA;
+  watchdog.address = 0x80808080;
+  watchdog.value = 0;
   bool hadHardwareInterruption = false;
   bool hadSoftwareInterruption = false;
   char interruptionType[4] = {0};
@@ -600,7 +610,11 @@ int main (int argc, char* argv[]) {
         FTypeInstructionZXI(R, &z, &x, &i);
         
         if (z != 0) {
-          R[z] = MEM32[(R[x] + i) >> 2];
+          if ((R[x] + i) >> 2 == watchdog.address)
+            R[z] = watchdog.value & 0x000000FF;
+          else
+            R[z] = MEM32[(R[x] + i) >> 2];
+          
           R[z] = R[z] >> (24 - ((R[x] + i) % 4) * 8);
           R[z] = R[z] & 0x000000FF;
         }
@@ -618,7 +632,11 @@ int main (int argc, char* argv[]) {
         FTypeInstructionZXI(R, &z, &x, &i);
 
         if (z != 0) {
-          R[z] = MEM32[(R[x] + i) >> 1];
+          if ((R[x] + i) >> 1 == watchdog.address)
+            R[z] = watchdog.value & 0x0000FFFF;
+          else
+            R[z] = MEM32[(R[x] + i) >> 1];
+
           R[z] = R[z] >> (16 - ((R[x] + i) % 4) * 16);
           R[z] = R[z] & 0x0000FFFF;
         }
@@ -635,8 +653,12 @@ int main (int argc, char* argv[]) {
         // l32
         FTypeInstructionZXI(R, &z, &x, &i);
 
-        if (z != 0)
-          R[z] = MEM32[R[x] + i];
+        if (z != 0) {
+          if (R[x] + i == watchdog.address)
+            R[z] = watchdog.value;
+          else
+            R[z] = MEM32[R[x] + i];
+        }
 
         formatR(zName, z);
         formatR(xName, x);
@@ -650,7 +672,10 @@ int main (int argc, char* argv[]) {
         // s8
         FTypeInstructionZXI(R, &z, &x, &i);
 
-        MEM32[R[x] + i] = R[z];
+        if ((R[x] + i) == watchdog.address)
+          watchdog.value = R[z] & 0x000000FF;
+        else
+          MEM32[R[x] + i] = R[z] & 0x000000FF;
 
         formatR(zName, z);
         formatR(xName, x);
@@ -664,7 +689,10 @@ int main (int argc, char* argv[]) {
         // s16
         FTypeInstructionZXI(R, &z, &x, &i);
 
-        MEM32[(R[x] + i) << 1] = R[z];
+        if ((R[x] + i) << 1 == watchdog.address)
+          watchdog.value = R[z] & 0x0000FFFF;
+        else
+          MEM32[(R[x] + i) << 1] = R[z] & 0x0000FFFF;
 
         formatR(zName, z);
         formatR(xName, x);
@@ -678,15 +706,10 @@ int main (int argc, char* argv[]) {
         // s32
         FTypeInstructionZXI(R, &z, &x, &i);
 
-        switch((R[x] + i) << 2) {
-          case 0x80808080:
-            watchdog = R[z];
-            break;
-          default:
-            MEM32[(R[x] + i) << 2] = R[z];
-            break;
-        }
-
+        if ((R[x] + i) << 2 == watchdog.address)
+          watchdog.value = R[z];
+        else
+          MEM32[(R[x] + i) << 2] = R[z];
 
         formatR(zName, z);
         formatR(xName, x);
@@ -1036,13 +1059,13 @@ int main (int argc, char* argv[]) {
         break;
     }
 
-    if (watchdog >> 31 == 0b1) {
-      if (watchdog << 1 == 0) {
+    if (watchdog.value >> 31 == 0b1) {
+      if (watchdog.value << 1 == 0) {
         hadHardwareInterruption = true;
         sprintf(interruptionType, "h1");
-        watchdog = 0;
+        watchdog.value = 0;
       }
-      watchdog--;
+      watchdog.value--;
     }
 
     R[29] = (R[29] + 4) >> 2;
