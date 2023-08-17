@@ -11,7 +11,7 @@ typedef struct InputOutputDevice {
   uint8_t interruptionType;
   uint32_t interruptionCode;
   uint32_t interruptionAddress;
-  uint32_t deviceAddress;
+  uint32_t address;
   uint32_t value;
 } InputOutputDevice;
 
@@ -47,7 +47,9 @@ void softwareInterruption(uint32_t* R, uint32_t* MEM, uint32_t i, char interrupt
 
 void hardwareInterruption(uint32_t* R, uint32_t* MEM, InputOutputDevice device);
 
-InputOutputDevice createDevice(uint8_t intType, uint32_t intCode, uint32_t intAddress, uint32_t deviceAddress, uint32_t value);
+InputOutputDevice createDevice(uint8_t intType, uint32_t intCode, uint32_t intAddress, uint32_t address, uint32_t value);
+
+bool isDeviceAddress(uint32_t address, InputOutputDevice device);
 
 int main (int argc, char* argv[]) {
   FILE* input = fopen(argv[1], "r");
@@ -56,7 +58,12 @@ int main (int argc, char* argv[]) {
   uint32_t R[32] = {0};
 
   InputOutputDevice watchdog;
+  InputOutputDevice floatPointUnity[4] = {0};
   watchdog = createDevice(1, 0xE1AC04DA, 0x00000010, 0x80808080, 0);
+  floatPointUnity[0] = createDevice(0, 0x01EEE754, 0x00000014, 0x80808880, 0);
+  floatPointUnity[1] = createDevice(0, 0x01EEE754, 0x00000014, 0x80808884, 0);
+  floatPointUnity[2] = createDevice(0, 0x01EEE754, 0x00000014, 0x80808888, 0);
+  floatPointUnity[3] = createDevice(0, 0x01EEE754, 0x00000014, 0x8080888C, 0);
 
   bool hadHardwareInterruption = false;
   bool hadSoftwareInterruption = false;
@@ -95,7 +102,7 @@ int main (int argc, char* argv[]) {
     uint8_t z = 0, x = 0, y = 0, l = 0, v = 0, w = 0, temp[5];
     char RName[5], zName[5], xName[5], yName[5], lName[5];
     int32_t xxyl = 0;
-    uint32_t oldPC = 0, oldSP = 0, xyl = 0;
+    uint32_t oldPC = 0, oldSP = 0, xyl = 0, memAddress = 0;
     char hexadecimals[55] = {0};
     char registers[20] = {0};
     i = 0;
@@ -616,11 +623,21 @@ int main (int argc, char* argv[]) {
         // l8
         FTypeInstructionZXI(R, &z, &x, &i);
         
+        memAddress = (R[x] + i) >> 2;
+        
         if (z != 0) {
-          if ((R[x] + i) >> 2 == watchdog.deviceAddress)
+          if (isDeviceAddress(memAddress, watchdog))
             R[z] = watchdog.value & 0x000000FF;
+          else if (isDeviceAddress(memAddress, floatPointUnity[0]))
+            R[z] = floatPointUnity[0].value & 0x000000FF;
+          else if (isDeviceAddress(memAddress, floatPointUnity[1]))
+            R[z] = floatPointUnity[1].value & 0x000000FF;
+          else if (isDeviceAddress(memAddress, floatPointUnity[2]))
+            R[z] = floatPointUnity[2].value & 0x000000FF;
+          else if (isDeviceAddress(memAddress, floatPointUnity[3]))
+            R[z] = floatPointUnity[3].value & 0x000000FF;
           else
-            R[z] = MEM32[(R[x] + i) >> 2];
+            R[z] = MEM32[memAddress];
           
           R[z] = R[z] >> (24 - ((R[x] + i) % 4) * 8);
           R[z] = R[z] & 0x000000FF;
@@ -638,9 +655,19 @@ int main (int argc, char* argv[]) {
         // l16
         FTypeInstructionZXI(R, &z, &x, &i);
 
+        memAddress = (R[x] + i) >> 1;
+
         if (z != 0) {
-          if ((R[x] + i) >> 1 == watchdog.deviceAddress)
+          if (isDeviceAddress(memAddress, watchdog))
             R[z] = watchdog.value & 0x0000FFFF;
+          else if (isDeviceAddress(memAddress, floatPointUnity[0]))
+            R[z] = floatPointUnity[0].value & 0x0000FFFF;
+          else if (isDeviceAddress(memAddress, floatPointUnity[1]))
+            R[z] = floatPointUnity[1].value & 0x0000FFFF;
+          else if (isDeviceAddress(memAddress, floatPointUnity[2]))
+            R[z] = floatPointUnity[2].value & 0x0000FFFF;
+          else if (isDeviceAddress(memAddress, floatPointUnity[3]))
+            R[z] = floatPointUnity[3].value & 0x0000FFFF;
           else
             R[z] = MEM32[(R[x] + i) >> 1];
 
@@ -660,9 +687,19 @@ int main (int argc, char* argv[]) {
         // l32
         FTypeInstructionZXI(R, &z, &x, &i);
 
+        memAddress = R[x] + i;
+
         if (z != 0) {
-          if (R[x] + i == watchdog.deviceAddress)
+          if (isDeviceAddress(memAddress, watchdog))
             R[z] = watchdog.value;
+          else if (isDeviceAddress(memAddress, floatPointUnity[0]))
+            R[z] = floatPointUnity[0].value;
+          else if (isDeviceAddress(memAddress, floatPointUnity[1]))
+            R[z] = floatPointUnity[1].value;
+          else if (isDeviceAddress(memAddress, floatPointUnity[2]))
+            R[z] = floatPointUnity[2].value;
+          else if (isDeviceAddress(memAddress, floatPointUnity[3]))
+            R[z] = floatPointUnity[3].value;
           else
             R[z] = MEM32[R[x] + i];
         }
@@ -679,10 +716,20 @@ int main (int argc, char* argv[]) {
         // s8
         FTypeInstructionZXI(R, &z, &x, &i);
 
-        if ((R[x] + i) == watchdog.deviceAddress)
+        memAddress = R[x] + i;
+
+        if (isDeviceAddress(memAddress, watchdog))
           watchdog.value = R[z] & 0x000000FF;
+        else if (isDeviceAddress(memAddress, floatPointUnity[0]))
+          floatPointUnity[0].value = R[z] & 0x000000FF;
+        else if (isDeviceAddress(memAddress, floatPointUnity[1]))
+          floatPointUnity[1].value = R[z] & 0x000000FF;
+        else if (isDeviceAddress(memAddress, floatPointUnity[2]))
+          floatPointUnity[2].value = R[z] & 0x000000FF;
+        else if (isDeviceAddress(memAddress, floatPointUnity[3]))
+          floatPointUnity[3].value = R[z] & 0x000000FF;
         else
-          MEM32[R[x] + i] = R[z] & 0x000000FF;
+          MEM32[memAddress] = R[z] & 0x000000FF;
 
         formatR(zName, z);
         formatR(xName, x);
@@ -696,10 +743,20 @@ int main (int argc, char* argv[]) {
         // s16
         FTypeInstructionZXI(R, &z, &x, &i);
 
-        if ((R[x] + i) << 1 == watchdog.deviceAddress)
+        memAddress = (R[x] + i) << 1;
+
+        if (isDeviceAddress(memAddress, watchdog))
           watchdog.value = R[z] & 0x0000FFFF;
+        else if (isDeviceAddress(memAddress, floatPointUnity[0]))
+          floatPointUnity[0].value = R[z] & 0x0000FFFF;
+        else if (isDeviceAddress(memAddress, floatPointUnity[1]))
+          floatPointUnity[1].value = R[z] & 0x0000FFFF;
+        else if (isDeviceAddress(memAddress, floatPointUnity[2]))
+          floatPointUnity[2].value = R[z] & 0x0000FFFF;
+        else if (isDeviceAddress(memAddress, floatPointUnity[3]))
+          floatPointUnity[3].value = R[z] & 0x0000FFFF;
         else
-          MEM32[(R[x] + i) << 1] = R[z] & 0x0000FFFF;
+          MEM32[memAddress] = R[z] & 0x0000FFFF;
 
         formatR(zName, z);
         formatR(xName, x);
@@ -713,10 +770,20 @@ int main (int argc, char* argv[]) {
         // s32
         FTypeInstructionZXI(R, &z, &x, &i);
 
-        if ((R[x] + i) << 2 == watchdog.deviceAddress)
+        memAddress = (R[x] + i) << 2;
+
+        if (isDeviceAddress(memAddress, watchdog))
           watchdog.value = R[z];
+        else if (isDeviceAddress(memAddress, floatPointUnity[0]))
+          floatPointUnity[0].value = R[z];
+        else if (isDeviceAddress(memAddress, floatPointUnity[1]))
+          floatPointUnity[1].value = R[z];
+        else if (isDeviceAddress(memAddress, floatPointUnity[2]))
+          floatPointUnity[2].value = R[z];
+        else if (isDeviceAddress(memAddress, floatPointUnity[3]))
+          floatPointUnity[3].value = R[z];
         else
-          MEM32[(R[x] + i) << 2] = R[z];
+          MEM32[memAddress] = R[z];
 
         formatR(zName, z);
         formatR(xName, x);
@@ -1296,14 +1363,18 @@ void hardwareInterruption(uint32_t* R, uint32_t* MEM, InputOutputDevice device) 
   R[29] = device.interruptionAddress >> 2;
 }
 
-InputOutputDevice createDevice(uint8_t intType, uint32_t intCode, uint32_t intAddress, uint32_t deviceAddress, uint32_t value) {
+InputOutputDevice createDevice(uint8_t intType, uint32_t intCode, uint32_t intAddress, uint32_t address, uint32_t value) {
   InputOutputDevice device;
 
   device.interruptionType = intType;
   device.interruptionCode = intCode;
   device.interruptionAddress = intAddress;
-  device.deviceAddress = deviceAddress;
+  device.address = address;
   device.value = value;
 
   return device;
+}
+
+bool isDeviceAddress(uint32_t address, InputOutputDevice device) {
+  return (address >= device.address && address <= device.address + 4);
 }
