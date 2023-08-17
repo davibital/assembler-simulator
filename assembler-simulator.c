@@ -47,6 +47,8 @@ void softwareInterruption(uint32_t* R, uint32_t* MEM, uint32_t i, char interrupt
 
 void hardwareInterruption(uint32_t* R, uint32_t* MEM, InputOutputDevice device);
 
+InputOutputDevice createDevice(uint8_t intType, uint32_t intCode, uint32_t intAddress, uint32_t deviceAddress, uint32_t value);
+
 int main (int argc, char* argv[]) {
   FILE* input = fopen(argv[1], "r");
   FILE* output = fopen(argv[2], "w");
@@ -54,11 +56,7 @@ int main (int argc, char* argv[]) {
   uint32_t R[32] = {0};
 
   InputOutputDevice watchdog;
-  watchdog.interruptionType = 1;
-  watchdog.interruptionCode = 0xE1AC04DA;
-  watchdog.interruptionAddress = 0x00000010;
-  watchdog.deviceAddress = 0x80808080;
-  watchdog.value = 0;
+  watchdog = createDevice(1, 0xE1AC04DA, 0x00000010, 0x80808080, 0);
 
   bool hadHardwareInterruption = false;
   bool hadSoftwareInterruption = false;
@@ -1296,4 +1294,16 @@ void hardwareInterruption(uint32_t* R, uint32_t* MEM, InputOutputDevice device) 
   
   R[26] = device.interruptionCode;
   R[29] = device.interruptionAddress >> 2;
+}
+
+InputOutputDevice createDevice(uint8_t intType, uint32_t intCode, uint32_t intAddress, uint32_t deviceAddress, uint32_t value) {
+  InputOutputDevice device;
+
+  device.interruptionType = intType;
+  device.interruptionCode = intCode;
+  device.interruptionAddress = intAddress;
+  device.deviceAddress = deviceAddress;
+  device.value = value;
+
+  return device;
 }
