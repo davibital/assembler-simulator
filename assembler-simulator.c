@@ -51,6 +51,8 @@ InputOutputDevice createDevice(uint8_t intType, uint32_t intCode, uint32_t intAd
 
 bool isDeviceAddress(uint32_t address, InputOutputDevice device);
 
+uint32_t getByte(uint8_t numberOfBytes, uint32_t hex, uint32_t address);
+
 int main (int argc, char* argv[]) {
   FILE* input = fopen(argv[1], "r");
   FILE* output = fopen(argv[2], "w");
@@ -627,20 +629,17 @@ int main (int argc, char* argv[]) {
         
         if (z != 0) {
           if (isDeviceAddress(memAddress, watchdog))
-            R[z] = watchdog.value & 0x000000FF;
+            R[z] = getByte(1, watchdog.value, R[x] + i);
           else if (isDeviceAddress(memAddress, floatPointUnity[0]))
-            R[z] = floatPointUnity[0].value & 0x000000FF;
+            R[z] = getByte(1, floatPointUnity[0].value, R[x] + i);
           else if (isDeviceAddress(memAddress, floatPointUnity[1]))
-            R[z] = floatPointUnity[1].value & 0x000000FF;
+            R[z] = getByte(1, floatPointUnity[1].value, R[x] + i);
           else if (isDeviceAddress(memAddress, floatPointUnity[2]))
-            R[z] = floatPointUnity[2].value & 0x000000FF;
+            R[z] = getByte(1, floatPointUnity[2].value, R[x] + i);
           else if (isDeviceAddress(memAddress, floatPointUnity[3]))
-            R[z] = floatPointUnity[3].value & 0x000000FF;
+            R[z] = getByte(1, floatPointUnity[3].value, R[x] + i);
           else
-            R[z] = MEM32[memAddress];
-          
-          R[z] = R[z] >> (24 - ((R[x] + i) % 4) * 8);
-          R[z] = R[z] & 0x000000FF;
+            R[z] = getByte(1, MEM32[memAddress], R[x] + i);
         }
 
         formatR(zName, z);
@@ -659,20 +658,17 @@ int main (int argc, char* argv[]) {
 
         if (z != 0) {
           if (isDeviceAddress(memAddress, watchdog))
-            R[z] = watchdog.value & 0x0000FFFF;
+            R[z] = getByte(2, watchdog.value, (R[x] + i) << 1);
           else if (isDeviceAddress(memAddress, floatPointUnity[0]))
-            R[z] = floatPointUnity[0].value & 0x0000FFFF;
+            R[z] = getByte(2, floatPointUnity[0].value, (R[x] + i) << 1);
           else if (isDeviceAddress(memAddress, floatPointUnity[1]))
-            R[z] = floatPointUnity[1].value & 0x0000FFFF;
+            R[z] = getByte(2, floatPointUnity[1].value, (R[x] + i) << 1);
           else if (isDeviceAddress(memAddress, floatPointUnity[2]))
-            R[z] = floatPointUnity[2].value & 0x0000FFFF;
+            R[z] = getByte(2, floatPointUnity[2].value, (R[x] + i) << 1);
           else if (isDeviceAddress(memAddress, floatPointUnity[3]))
-            R[z] = floatPointUnity[3].value & 0x0000FFFF;
+            R[z] = getByte(2, floatPointUnity[3].value, (R[x] + i) << 1);
           else
-            R[z] = MEM32[(R[x] + i) >> 1];
-
-          R[z] = R[z] >> (16 - ((R[x] + i) % 4) * 16);
-          R[z] = R[z] & 0x0000FFFF;
+            R[z] = getByte(2, MEM32[memAddress], (R[x] + i) << 1);
         }
 
         formatR(zName, z);
@@ -701,7 +697,7 @@ int main (int argc, char* argv[]) {
           else if (isDeviceAddress(memAddress, floatPointUnity[3]))
             R[z] = floatPointUnity[3].value;
           else
-            R[z] = MEM32[R[x] + i];
+            R[z] = MEM32[memAddress];
         }
 
         formatR(zName, z);
@@ -719,17 +715,17 @@ int main (int argc, char* argv[]) {
         memAddress = R[x] + i;
 
         if (isDeviceAddress(memAddress, watchdog))
-          watchdog.value = R[z] & 0x000000FF;
+          watchdog.value = getByte(1, R[z], memAddress);
         else if (isDeviceAddress(memAddress, floatPointUnity[0]))
-          floatPointUnity[0].value = R[z] & 0x000000FF;
+          floatPointUnity[0].value = getByte(1, R[z], memAddress);
         else if (isDeviceAddress(memAddress, floatPointUnity[1]))
-          floatPointUnity[1].value = R[z] & 0x000000FF;
+          floatPointUnity[1].value = getByte(1, R[z], memAddress);
         else if (isDeviceAddress(memAddress, floatPointUnity[2]))
-          floatPointUnity[2].value = R[z] & 0x000000FF;
+          floatPointUnity[2].value = getByte(1, R[z], memAddress);
         else if (isDeviceAddress(memAddress, floatPointUnity[3]))
-          floatPointUnity[3].value = R[z] & 0x000000FF;
+          floatPointUnity[3].value = getByte(1, R[z], memAddress);
         else
-          MEM32[memAddress] = R[z] & 0x000000FF;
+          MEM32[memAddress] = getByte(1, R[z], memAddress);
 
         formatR(zName, z);
         formatR(xName, x);
@@ -746,17 +742,17 @@ int main (int argc, char* argv[]) {
         memAddress = (R[x] + i) << 1;
 
         if (isDeviceAddress(memAddress, watchdog))
-          watchdog.value = R[z] & 0x0000FFFF;
+          watchdog.value = getByte(2, R[z], memAddress);
         else if (isDeviceAddress(memAddress, floatPointUnity[0]))
-          floatPointUnity[0].value = R[z] & 0x0000FFFF;
+          floatPointUnity[0].value = getByte(2, R[z], memAddress);
         else if (isDeviceAddress(memAddress, floatPointUnity[1]))
-          floatPointUnity[1].value = R[z] & 0x0000FFFF;
+          floatPointUnity[1].value = getByte(2, R[z], memAddress);
         else if (isDeviceAddress(memAddress, floatPointUnity[2]))
-          floatPointUnity[2].value = R[z] & 0x0000FFFF;
+          floatPointUnity[2].value = getByte(2, R[z], memAddress);
         else if (isDeviceAddress(memAddress, floatPointUnity[3]))
-          floatPointUnity[3].value = R[z] & 0x0000FFFF;
+          floatPointUnity[3].value = getByte(2, R[z], memAddress);
         else
-          MEM32[memAddress] = R[z] & 0x0000FFFF;
+          MEM32[memAddress] = getByte(2, R[z], memAddress);
 
         formatR(zName, z);
         formatR(xName, x);
@@ -1377,4 +1373,15 @@ InputOutputDevice createDevice(uint8_t intType, uint32_t intCode, uint32_t intAd
 
 bool isDeviceAddress(uint32_t address, InputOutputDevice device) {
   return (address >= device.address && address <= device.address + 4);
+}
+
+uint32_t getByte(uint8_t numberOfBytes, uint32_t hex, uint32_t address) {
+  uint32_t result = hex << (address % 4 * 8);
+
+  if (numberOfBytes == 1)
+    return result >> 24;
+  else if (numberOfBytes == 2)
+    return result >> 16;
+  
+  return result;
 }
