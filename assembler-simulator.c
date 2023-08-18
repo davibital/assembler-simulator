@@ -43,9 +43,11 @@ void formatR (char RName[5], uint8_t R);
 
 void toUpperCase(char* str);
 
-void softwareInterruption(uint32_t* R, uint32_t* MEM, uint32_t i, char interruptionType[]);
+void interruptionSubRoutine(uint32_t* R, uint32_t* MEM);
 
-void hardwareInterruption(uint32_t* R, uint32_t* MEM, InputOutputDevice device);
+void softwareInterruption(uint32_t* R, char interruptionType[]);
+
+void hardwareInterruption(uint32_t* R, InputOutputDevice device);
 
 InputOutputDevice createDevice(uint8_t intType, uint32_t intCode, uint32_t intAddress, uint32_t address, uint32_t value);
 
@@ -85,14 +87,14 @@ int main (int argc, char* argv[]) {
       if (hadHardwareInterruption) {
 
         if (strcmp(interruptionType, "1") == 0)
-          hardwareInterruption(R, MEM32, watchdog);
+          hardwareInterruption(R, watchdog);
 
 
         fprintf(output, "[HARDWARE INTERRUPTION %s]\n", interruptionType);
         hadHardwareInterruption = false;
         strcpy(interruptionType, "");
       } else if (hadSoftwareInterruption) {
-        softwareInterruption(R, MEM32, i, interruptionType);
+        softwareInterruption(R, interruptionType);
         fprintf(output, "[SOFTWARE INTERRUPTION]\n");
         hadSoftwareInterruption = false;
         strcpy(interruptionType, "");
@@ -299,6 +301,7 @@ int main (int argc, char* argv[]) {
             if (R[y] == 0) {
               updateSR(&R[31], "ZD", R[y] == 0);
               if ((R[31] & 0x00000002) != 0) {
+                interruptionSubRoutine(R, MEM32);
                 hadSoftwareInterruption = true;
                 sprintf(interruptionType, "zd");
               }
@@ -355,6 +358,7 @@ int main (int argc, char* argv[]) {
             if (R[y] == 0) {
               updateSR(&R[31], "ZD", R[y] == 0);
               if ((R[31] & 0x00000002) != 0) {
+                interruptionSubRoutine(R, MEM32);
                 hadSoftwareInterruption = true;
                 sprintf(interruptionType, "zd");
               }
@@ -568,6 +572,7 @@ int main (int argc, char* argv[]) {
         if (R[y] == 0) {
           updateSR(&R[31], "ZD", R[y] == 0);
           if ((R[31] & 0x00000002) != 0) {
+            interruptionSubRoutine(R, MEM32);
             hadSoftwareInterruption = true;
             sprintf(interruptionType, "zd");
           }
@@ -933,13 +938,18 @@ int main (int argc, char* argv[]) {
         sprintf(instruction, "int %u", i);
 
         if (i == 0) {
+          R[26] = 0;
           R[29] = 0x00000000 - 4;
           running = 0;
         }
         else {
-          R[29] = 0x0000000C - 4;
+          interruptionSubRoutine(R, MEM32);
           hadSoftwareInterruption = true;
           sprintf(interruptionType, "int");
+
+          R[26] = i;
+          R[27] = R[29];
+          R[29] = 0x0000000C - 4;
         }
 
         fprintf(output, "0x%08X:\t%-25s\tCR=0x%08X,PC=0x%08X\n", oldPC, instruction, R[26], (R[29] + 4));
@@ -1124,6 +1134,7 @@ int main (int argc, char* argv[]) {
         R[29] = R[29] << 2;
         updateSR(&R[31], "IV", 1);
         fprintf(output, "[INVALID INSTRUCTION @ 0x%08X]\n", R[29]);
+        interruptionSubRoutine(R, MEM32);
         hadSoftwareInterruption = true;
         sprintf(interruptionType, "iv");
         break;
@@ -1131,6 +1142,7 @@ int main (int argc, char* argv[]) {
 
     if (watchdog.value >> 31 == 0b1) {
       if (watchdog.value << 1 == 0) {
+        interruptionSubRoutine(R, MEM32);
         hadHardwareInterruption = true;
         sprintf(interruptionType, "%d", watchdog.interruptionType);
         watchdog.value = 0;
@@ -1319,14 +1331,16 @@ void toUpperCase(char* str) {
   }
 }
 
-void softwareInterruption(uint32_t* R, uint32_t* MEM, uint32_t i, char interruptionType[]) {
-  MEM[R[30] >> 2] = R[29] + 1;
+void interruptionSubRoutine(uint32_t* R, uint32_t* MEM) {
+  MEM[R[30] >> 2] = R[29] + 4;
   R[30] -= 4;
   MEM[R[30] >> 2] = R[26];
   R[30] -= 4;
   MEM[R[30] >> 2] = R[27];
   R[30] -= 4;
+}
 
+void softwareInterruption(uint32_t* R, char interruptionType[]) {
   // zero division interruption
   if (strcmp(interruptionType, "zd") == 0) {
     R[26] = 0;
@@ -1339,22 +1353,9 @@ void softwareInterruption(uint32_t* R, uint32_t* MEM, uint32_t i, char interrupt
     R[27] = R[29];
     R[29] = 0x00000000;
   }
-  // interruption instruction
-  else if (strcmp(interruptionType, "int") == 0) {
-    R[26] = i;
-    R[27] = R[29];
-    R[29] = 0x0000000C >> 2;
-  }
 }
 
-void hardwareInterruption(uint32_t* R, uint32_t* MEM, InputOutputDevice device) {
-  MEM[R[30] >> 2] = R[29] + 1;
-  R[30] -= 4;
-  MEM[R[30] >> 2] = R[26];
-  R[30] -= 4;
-  MEM[R[30] >> 2] = R[27];
-  R[30] -= 4;
-  
+void hardwareInterruption(uint32_t* R, InputOutputDevice device) {  
   R[26] = device.interruptionCode;
   R[29] = device.interruptionAddress >> 2;
 }
