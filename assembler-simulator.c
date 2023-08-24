@@ -93,6 +93,8 @@ void writeInFPU(FPURegister* FPURegister, uint32_t value);
 
 void writeInFPUControl(FPURegisterControl* fpuControl, uint32_t value);
 
+void fpuOperation(FPURegisterControl* fpuControl, FPURegister* fpuOperandX, FPURegister* fpuOperandY, FPURegister* fpuResult);
+
 bool isDeviceAddress(uint32_t address, uint32_t deviceAddress);
 
 uint32_t get4ByteAddress(uint32_t address);
@@ -133,6 +135,22 @@ int main (int argc, char* argv[]) {
 
   while (running) {
 
+    char instruction[30] = {0};
+
+    uint8_t z = 0, x = 0, y = 0, l = 0, v = 0, w = 0, temp[5];
+    char RName[5], zName[5], xName[5], yName[5], lName[5];
+    int32_t xxyl = 0;
+    uint32_t oldSP = 0, xyl = 0, memAddress = 0, bytesValue, oldPC = R[29] << 2;
+    char hexadecimals[55] = {0};
+    char registers[20] = {0};
+    i = 0;
+    
+    uint64_t uresult = 0;
+    int64_t result = 0;
+
+    if (fpuControl.cycles > 0)
+      fpuControl.cycles--;
+
     if ((R[31] & 0x00000002) != 0) {
       if (hadHardwareInterruption) {
 
@@ -152,6 +170,21 @@ int main (int argc, char* argv[]) {
       }
     }
     
+    
+    char instruction[30] = {0};
+
+    uint8_t z = 0, x = 0, y = 0, l = 0, v = 0, w = 0, temp[5];
+    char RName[5], zName[5], xName[5], yName[5], lName[5];
+    int32_t xxyl = 0;
+    uint32_t oldPC = 0, oldSP = 0, xyl = 0, bytesValue, memAddress = 0;
+    char hexadecimals[55] = {0};
+    char registers[20] = {0};
+    i = 0;
+    
+    uint64_t uresult = 0;
+    int64_t result = 0;
+
+
     char instruction[30] = {0};
 
     uint8_t z = 0, x = 0, y = 0, l = 0, v = 0, w = 0, temp[5];
@@ -353,6 +386,7 @@ int main (int argc, char* argv[]) {
               updateSR(&R[31], "ZD", R[y] == 0);
               if ((R[31] & 0x00000002) != 0) {
                 interruptionSubRoutine(R, MEM32);
+                interruptionAddress = oldPC;
                 hadSoftwareInterruption = true;
                 sprintf(interruptionType, "zd");
               }
@@ -410,6 +444,7 @@ int main (int argc, char* argv[]) {
               updateSR(&R[31], "ZD", R[y] == 0);
               if ((R[31] & 0x00000002) != 0) {
                 interruptionSubRoutine(R, MEM32);
+                interruptionAddress = oldPC;
                 hadSoftwareInterruption = true;
                 sprintf(interruptionType, "zd");
               }
@@ -624,6 +659,7 @@ int main (int argc, char* argv[]) {
           updateSR(&R[31], "ZD", R[y] == 0);
           if ((R[31] & 0x00000002) != 0) {
             interruptionSubRoutine(R, MEM32);
+            interruptionAddress = oldPC;
             hadSoftwareInterruption = true;
             sprintf(interruptionType, "zd");
           }
@@ -859,6 +895,15 @@ int main (int argc, char* argv[]) {
         toUpperCase(xName);
         fprintf(output, "0x%08X:\t%-25s\tMEM[0x%08X]=%s=0x%08X\n", R[29], instruction, (R[x] + i) << 2, zName, R[z]);
         break;
+      case 0b101010:
+        // bae
+        STypeInstruction(&oldPC, R, &i);
+
+        if ((R[31] & 0x00000001) == 0) R[29] = R[29] + (i << 2);
+
+        sprintf(instruction, "bae %i", i);
+        fprintf(output, "0x%08X:\t%-25s\tPC=0x%08X\n", oldPC, instruction, (R[29] + 4));
+        break;
       case 0b101011:
         // bat
         STypeInstruction(&oldPC, R, &i);
@@ -1000,6 +1045,7 @@ int main (int argc, char* argv[]) {
         }
         else {
           interruptionSubRoutine(R, MEM32);
+          interruptionAddress = oldPC;
           hadSoftwareInterruption = true;
           sprintf(interruptionType, "int");
 
@@ -1037,7 +1083,7 @@ int main (int argc, char* argv[]) {
 
         sprintf(instruction, "call %i", i);
         fprintf(output, "0x%08X:\t%-25s\tPC=0x%08X,MEM[0x%08X]=0x%08X\n", oldPC, instruction, (R[29] + 4), oldSP, MEM32[R[30] >> 2]);
-
+        
         R[30] -= 4;
         break;
       case 0b011111:
@@ -1191,6 +1237,7 @@ int main (int argc, char* argv[]) {
         updateSR(&R[31], "IV", 1);
         fprintf(output, "[INVALID INSTRUCTION @ 0x%08X]\n", R[29]);
         interruptionSubRoutine(R, MEM32);
+        interruptionAddress = oldPC;
         hadSoftwareInterruption = true;
         sprintf(interruptionType, "iv");
         break;
@@ -1207,6 +1254,28 @@ int main (int argc, char* argv[]) {
         watchdog.value = 0;
       }
       watchdog.value--;
+    }
+
+    fpuOperation(&fpuControl, &fpuOperandX, &fpuOperandY, &fpuResult);
+
+    if (fpuControl.cycles == 0) {
+      interruptionSubRoutine(R, MEM32);
+      interruptionAddress = oldPC;
+      hadHardwareInterruption = true;
+      fpuControl.cycles = -1;
+      hardInt.type = fpuControl.interruptionType;
+      hardInt.code = 0x01EEE754;
+      switch(hardInt.type) {
+        case 2:
+          hardInt.address = 0x00000014;
+          break;
+        case 3:
+          hardInt.address = 0x00000018;
+          break;
+        case 4:
+          hardInt.address = 0x0000001C;
+          break;
+      }
     }
 
     R[29] = (R[29] + 4) >> 2;
@@ -1494,6 +1563,96 @@ void writeInFPUControl(FPURegisterControl* fpuControl, uint32_t value) {
 
   fpuControl->value = value & temp;
   fpuControl->operation = value & 0x0000001F;
+}
+
+void fpuOperation(FPURegisterControl* fpuControl, FPURegister* fpuOperandX, FPURegister* fpuOperandY, FPURegister* fpuResult) {
+  if (fpuControl->operation == 0) return;
+
+  uint32_t temp;
+  float x = fpuOperandX->floatValue;
+  float y = fpuOperandY->floatValue;
+
+  fpuControl->cycles = abs((fpuOperandX->exponent - fpuOperandY->exponent)) + 1;
+
+  switch (fpuControl->operation) {
+    case 0b00001:
+      fpuResult->floatValue = x + y;
+      memcpy(&fpuResult->value, &fpuResult->floatValue, sizeof(uint32_t));
+      fpuControl->interruptionType = 3;
+      fpuControl->status = 0;
+      break;
+    case 0b00010:
+      fpuResult->floatValue = x - y;
+      memcpy(&fpuResult->value, &fpuResult->floatValue, sizeof(uint32_t));
+      fpuControl->interruptionType = 3;
+      fpuControl->status = 0;
+      break;
+    case 0b00011:
+      fpuResult->floatValue = x * y;
+      memcpy(&fpuResult->value, &fpuResult->floatValue, sizeof(uint32_t));
+      fpuControl->interruptionType = 3;
+      fpuControl->status = 0;
+      break;
+    case 0b00100:
+      if (y != 0) {
+        fpuResult->floatValue = x / y;
+        memcpy(&fpuResult->value, &fpuResult->floatValue, sizeof(uint32_t));
+        fpuControl->interruptionType = 3;
+        fpuControl->status = 0;
+      } else {
+        fpuControl->status = 1;
+        fpuControl->interruptionType = 2;
+      }
+      break;
+    case 0b00101:
+      writeInFPU(fpuOperandX, (uint32_t) fpuResult->floatValue);
+      fpuOperandX->value = fpuResult->value;
+      fpuControl->cycles = 1;
+      fpuControl->interruptionType = 4;
+      fpuControl->status = 0;
+      break;
+    case 0b00110:
+      writeInFPU(fpuOperandY, (uint32_t) fpuResult->floatValue);
+      fpuOperandY->value = fpuResult->value;
+      fpuControl->cycles = 1;
+      fpuControl->interruptionType = 4;
+      fpuControl->status = 0;
+      break;
+    case 0b00111:
+      // teto
+      temp = fpuResult->floatValue + 1;
+      writeInFPU(fpuResult, temp);
+      fpuControl->cycles = 1;
+      fpuControl->interruptionType = 4;
+      fpuControl->status = 0;
+      break;
+    case 0b01000:
+      // piso
+      temp = fpuResult->floatValue - 1;
+      writeInFPU(fpuResult, temp);
+      fpuControl->cycles = 1;
+      fpuControl->interruptionType = 4;
+      fpuControl->status = 0;
+      break;
+    case 0b01001:
+      // arredondamento
+      temp = fpuResult->floatValue;
+      if ((fpuResult->floatValue - temp) >= 5)
+        temp++;
+      writeInFPU(fpuResult, temp);
+      fpuControl->cycles = 1;
+      fpuControl->interruptionType = 4;
+      fpuControl->status = 0;
+      break;
+    default:
+      fpuControl->cycles = 1;
+      fpuControl->status = 1;
+      fpuControl->interruptionType = 2;
+      break;
+  }
+
+  fpuControl->operation = 0;
+  fpuControl->value = fpuControl->status << 5;
 }
 
 bool isDeviceAddress(uint32_t address, uint32_t deviceAddress) {
