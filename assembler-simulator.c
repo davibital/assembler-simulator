@@ -7,13 +7,43 @@
 #include <string.h>
 #include <stdbool.h>
 
-typedef struct InputOutputDevice {
-  uint8_t interruptionType;
-  uint32_t interruptionCode;
-  uint32_t interruptionAddress;
+typedef struct Watchdog {
   uint32_t address;
   uint32_t value;
-} InputOutputDevice;
+} Watchdog;
+
+typedef struct Terminal {
+  uint32_t address;
+  uint32_t value;
+  uint8_t input;
+  char output[256];
+} Terminal;
+
+typedef struct FPURegister {
+  uint32_t address;
+  uint32_t value;
+  
+  float floatValue;
+  uint8_t exponent;
+  uint32_t fractional;
+} FPURegister;
+
+typedef struct FPURegisterControl {
+  uint32_t address;
+  uint32_t value;
+
+  uint8_t cycles;
+  uint8_t status;
+  uint8_t operation;
+
+  uint8_t interruptionType;
+} FPURegisterControl;
+
+typedef struct HardwareInterruption {
+  uint8_t type;
+  uint32_t code;
+  uint32_t address;
+} HardwareInterruption;
 
 void getFileInstructions(FILE* input, uint32_t* MEM);
 
@@ -47,11 +77,23 @@ void interruptionSubRoutine(uint32_t* R, uint32_t* MEM);
 
 void softwareInterruption(uint32_t* R, char interruptionType[]);
 
-void hardwareInterruption(uint32_t* R, InputOutputDevice device);
+void hardwareInterruption(uint32_t* R, HardwareInterruption hardInt, char* intType, uint32_t interruptionAddress);
 
-InputOutputDevice createDevice(uint8_t intType, uint32_t intCode, uint32_t intAddress, uint32_t address, uint32_t value);
+Watchdog createWatchdog(uint32_t address);
 
-bool isDeviceAddress(uint32_t address, InputOutputDevice device);
+Terminal createTerminal(uint32_t address);
+
+FPURegister createFPURegister(uint32_t address);
+
+FPURegisterControl createFPURegisterControl(uint32_t address);
+
+void writeInTerminal(Terminal* terminal, uint32_t value);
+
+void writeInFPU(FPURegister* FPURegister, uint32_t value);
+
+void writeInFPUControl(FPURegisterControl* fpuControl, uint32_t value);
+
+bool isDeviceAddress(uint32_t address, uint32_t deviceAddress);
 
 uint32_t get4ByteAddress(uint32_t address);
 
@@ -63,16 +105,22 @@ int main (int argc, char* argv[]) {
 
   uint32_t R[32] = {0};
   
-  InputOutputDevice watchdog;
-  InputOutputDevice fpuOperandX, fpuOperandY, fpuResult, fpuControl;
-  watchdog = createDevice(1, 0xE1AC04DA, 0x00000010, 0x80808080, 0);
-  fpuOperandX = createDevice(0, 0x01EEE754, 0x00000014, 0x80808880, 0);
-  fpuOperandY = createDevice(0, 0x01EEE754, 0x00000014, 0x80808884, 0);
-  fpuResult = createDevice(0, 0x01EEE754, 0x00000014, 0x80808888, 0);
-  fpuControl = createDevice(0, 0x01EEE754, 0x00000014, 0x8080888C, 0);
+  Terminal terminal;
+  Watchdog watchdog;
+  FPURegister fpuOperandX, fpuOperandY, fpuResult;
+  FPURegisterControl fpuControl;
+  HardwareInterruption hardInt = {0};
+
+  watchdog = createWatchdog(0x80808080);
+  fpuOperandX = createFPURegister(0x80808880);
+  fpuOperandY = createFPURegister(0x80808884);
+  fpuResult = createFPURegister(0x80808888);
+  fpuControl = createFPURegisterControl(0x8080888C);
+  terminal = createTerminal(0x88888888);
 
   bool hadHardwareInterruption = false;
   bool hadSoftwareInterruption = false;
+  uint32_t interruptionAddress = 0;
   char interruptionType[4] = {0};
   int32_t i = 0;
 
@@ -88,12 +136,13 @@ int main (int argc, char* argv[]) {
     if ((R[31] & 0x00000002) != 0) {
       if (hadHardwareInterruption) {
 
-        if (strcmp(interruptionType, "1") == 0)
-          hardwareInterruption(R, watchdog);
-
+        hardwareInterruption(R, hardInt, interruptionType, interruptionAddress);
 
         fprintf(output, "[HARDWARE INTERRUPTION %s]\n", interruptionType);
         hadHardwareInterruption = false;
+        hardInt.type = 0;
+        hardInt.code = 0;
+        hardInt.address = 0;
         strcpy(interruptionType, "");
       } else if (hadSoftwareInterruption) {
         softwareInterruption(R, interruptionType);
@@ -635,16 +684,18 @@ int main (int argc, char* argv[]) {
         memAddress = get4ByteAddress(R[x] + i);
         
         if (z != 0) {
-          if (isDeviceAddress(R[x] + i, watchdog))
+          if (isDeviceAddress(R[x] + i, watchdog.address))
             R[z] = getByte(1, watchdog.value, R[x] + i);
-          else if (isDeviceAddress(R[x] + i, fpuOperandX))
+          else if (isDeviceAddress(R[x] + i, fpuOperandX.address))
             R[z] = getByte(1, (uint32_t) fpuOperandX.value, R[x] + i);
-          else if (isDeviceAddress(R[x] + i, fpuOperandY))
+          else if (isDeviceAddress(R[x] + i, fpuOperandY.address))
             R[z] = getByte(1, (uint32_t) fpuOperandY.value, R[x] + i);
-          else if (isDeviceAddress(R[x] + i, fpuResult))
+          else if (isDeviceAddress(R[x] + i, fpuResult.address))
             R[z] = getByte(1, (uint32_t) fpuResult.value, R[x] + i);
-          else if (isDeviceAddress(R[x] + i, fpuControl))
+          else if (isDeviceAddress(R[x] + i, fpuControl.address))
             R[z] = getByte(1, (uint32_t) fpuControl.value, R[x] + i);
+          else if (isDeviceAddress(R[x] + i, terminal.address))
+            R[z] = getByte(1, terminal.value, R[x] + i);
           else
             R[z] = getByte(1, MEM32[memAddress >> 2], R[x] + i);
         }
@@ -664,16 +715,18 @@ int main (int argc, char* argv[]) {
         memAddress = get4ByteAddress((R[x] + i) << 1);
 
         if (z != 0) {
-          if (isDeviceAddress((R[x] + i) << 1, watchdog))
+          if (isDeviceAddress((R[x] + i) << 1, watchdog.address))
             R[z] = getByte(2, watchdog.value, (R[x] + i) << 1);
-          else if (isDeviceAddress((R[x] + i) << 1, fpuOperandX))
+          else if (isDeviceAddress((R[x] + i) << 1, fpuOperandX.address))
             R[z] = getByte(2, (uint32_t) fpuOperandX.value, (R[x] + i) << 1);
-          else if (isDeviceAddress((R[x] + i) << 1, fpuOperandY))
+          else if (isDeviceAddress((R[x] + i) << 1, fpuOperandY.address))
             R[z] = getByte(2, (uint32_t) fpuOperandY.value, (R[x] + i) << 1);
-          else if (isDeviceAddress((R[x] + i) << 1, fpuResult))
+          else if (isDeviceAddress((R[x] + i) << 1, fpuResult.address))
             R[z] = getByte(2, (uint32_t) fpuResult.value, (R[x] + i) << 1);
-          else if (isDeviceAddress((R[x] + i) << 1, fpuControl))
+          else if (isDeviceAddress((R[x] + i) << 1, fpuControl.address))
             R[z] = getByte(2, (uint32_t) fpuControl.value, (R[x] + i) << 1);
+          else if (isDeviceAddress((R[x] + i) << 1, terminal.address))
+            R[z] = getByte(2, terminal.value, (R[x] + i) << 1);
           else
             R[z] = getByte(2, MEM32[memAddress >> 2], (R[x] + i) << 1);
         }
@@ -693,16 +746,18 @@ int main (int argc, char* argv[]) {
         memAddress = (R[x] + i) << 2;
 
         if (z != 0) {
-          if (isDeviceAddress(memAddress, watchdog))
+          if (isDeviceAddress(memAddress, watchdog.address))
             R[z] = watchdog.value;
-          else if (isDeviceAddress(memAddress, fpuOperandX))
+          else if (isDeviceAddress(memAddress, fpuOperandX.address))
             R[z] = fpuOperandX.value;
-          else if (isDeviceAddress(memAddress, fpuOperandY))
+          else if (isDeviceAddress(memAddress, fpuOperandY.address))
             R[z] = fpuOperandY.value;
-          else if (isDeviceAddress(memAddress, fpuResult))
+          else if (isDeviceAddress(memAddress, fpuResult.address))
             R[z] = fpuResult.value;
-          else if (isDeviceAddress(memAddress, fpuControl))
+          else if (isDeviceAddress(memAddress, fpuControl.address))
             R[z] = fpuControl.value;
+          else if (isDeviceAddress(memAddress, terminal.address))
+            R[z] = terminal.value;
           else
             R[z] = MEM32[memAddress >> 2];
         }
@@ -722,16 +777,18 @@ int main (int argc, char* argv[]) {
         memAddress = get4ByteAddress(R[x] + i);
         bytesValue = getByte(1, R[z], R[x] + i);
 
-        if (isDeviceAddress(R[x] + i, watchdog))
+        if (isDeviceAddress(R[x] + i, watchdog.address))
           watchdog.value = bytesValue;
-        else if (isDeviceAddress(R[x] + i, fpuOperandX))
-          fpuOperandX.value = bytesValue;
-        else if (isDeviceAddress(R[x] + i, fpuOperandY))
-          fpuOperandY.value = bytesValue;
-        else if (isDeviceAddress(R[x] + i, fpuResult))
-          fpuResult.value = bytesValue;
-        else if (isDeviceAddress(R[x] + i, fpuControl))
-          fpuControl.value = bytesValue;
+        else if (isDeviceAddress(R[x] + i, fpuOperandX.address))
+          writeInFPU(&fpuOperandX, bytesValue);
+        else if (isDeviceAddress(R[x] + i, fpuOperandY.address))
+          writeInFPU(&fpuOperandY, bytesValue);
+        else if (isDeviceAddress(R[x] + i, fpuResult.address))
+          writeInFPU(&fpuResult, bytesValue);
+        else if (isDeviceAddress(R[x] + i, fpuControl.address))
+          writeInFPUControl(&fpuControl, bytesValue);
+        else if (isDeviceAddress(R[x] + i, terminal.address))
+          writeInTerminal(&terminal, bytesValue);
         else
           MEM32[memAddress >> 2] = bytesValue;
 
@@ -750,16 +807,18 @@ int main (int argc, char* argv[]) {
         memAddress = get4ByteAddress((R[x] + i) << 1);
         bytesValue = getByte(2, R[z], (R[x] + i) << 1);
 
-        if (isDeviceAddress((R[x] + i) << 1, watchdog))
+        if (isDeviceAddress((R[x] + i) << 1, watchdog.address))
           watchdog.value = bytesValue;
-        else if (isDeviceAddress((R[x] + i) << 1, fpuOperandX))
-          fpuOperandX.value = bytesValue;
-        else if (isDeviceAddress((R[x] + i) << 1, fpuOperandY))
-          fpuOperandY.value = bytesValue;
-        else if (isDeviceAddress((R[x] + i) << 1, fpuResult))
-          fpuResult.value = bytesValue;
-        else if (isDeviceAddress((R[x] + i) << 1, fpuControl))
-          fpuControl.value = bytesValue;
+        else if (isDeviceAddress((R[x] + i) << 1, fpuOperandX.address))
+          writeInFPU(&fpuOperandX, bytesValue);
+        else if (isDeviceAddress((R[x] + i) << 1, fpuOperandY.address))
+          writeInFPU(&fpuOperandY, bytesValue);
+        else if (isDeviceAddress((R[x] + i) << 1, fpuResult.address))
+          writeInFPU(&fpuResult, bytesValue);
+        else if (isDeviceAddress((R[x] + i) << 1, fpuControl.address))
+          writeInFPUControl(&fpuControl, bytesValue);
+        else if (isDeviceAddress((R[x] + i) << 1, terminal.address))
+          writeInTerminal(&terminal , bytesValue);
         else
           MEM32[memAddress >> 2] = bytesValue;
 
@@ -777,16 +836,18 @@ int main (int argc, char* argv[]) {
 
         memAddress = get4ByteAddress((R[x] + i) << 2);
 
-        if (isDeviceAddress((R[x] + i) << 2, watchdog))
+        if (isDeviceAddress((R[x] + i) << 2, watchdog.address))
           watchdog.value = R[z];
-        else if (isDeviceAddress((R[x] + i) << 2, fpuOperandX)) 
-          fpuOperandX.value = R[z];
-        else if (isDeviceAddress((R[x] + i) << 2, fpuOperandY))
-          fpuOperandY.value = R[z];
-        else if (isDeviceAddress((R[x] + i) << 2, fpuResult))
-          fpuResult.value = R[z];
-        else if (isDeviceAddress((R[x] + i) << 2, fpuControl))
-          fpuControl.value = R[z];
+        else if (isDeviceAddress((R[x] + i) << 2, fpuOperandX.address)) 
+          writeInFPU(&fpuOperandX, R[z]);
+        else if (isDeviceAddress((R[x] + i) << 2, fpuOperandY.address))
+          writeInFPU(&fpuOperandY, R[z]);
+        else if (isDeviceAddress((R[x] + i) << 2, fpuResult.address))
+          writeInFPU(&fpuResult, R[z]);
+        else if (isDeviceAddress((R[x] + i) << 2, fpuControl.address))
+          writeInFPUControl(&fpuControl, R[z]);
+        else if (isDeviceAddress((R[x] + i) << 2, terminal.address))
+          writeInTerminal(&terminal, R[z]);
         else
           MEM32[memAddress >> 2] = R[z];
 
@@ -797,15 +858,6 @@ int main (int argc, char* argv[]) {
         toUpperCase(zName);
         toUpperCase(xName);
         fprintf(output, "0x%08X:\t%-25s\tMEM[0x%08X]=%s=0x%08X\n", R[29], instruction, (R[x] + i) << 2, zName, R[z]);
-        break;
-      case 0b101010:
-        // bae
-        STypeInstruction(&oldPC, R, &i);
-
-        if ((R[31] & 0x00000001) == 0) R[29] = R[29] + (i << 2);
-
-        sprintf(instruction, "bae %i", i);
-        fprintf(output, "0x%08X:\t%-25s\tPC=0x%08X\n", oldPC, instruction, (R[29] + 4));
         break;
       case 0b101011:
         // bat
@@ -1147,14 +1199,22 @@ int main (int argc, char* argv[]) {
     if (watchdog.value >> 31 == 0b1) {
       if (watchdog.value << 1 == 0) {
         interruptionSubRoutine(R, MEM32);
+        interruptionAddress = oldPC;
         hadHardwareInterruption = true;
-        sprintf(interruptionType, "%d", watchdog.interruptionType);
+        hardInt.type = 1;
+        hardInt.code = 0xE1AC04DA;
+        hardInt.address = 0x00000010;
         watchdog.value = 0;
       }
       watchdog.value--;
     }
 
     R[29] = (R[29] + 4) >> 2;
+  }
+
+  if (strcmp(terminal.output, "") != 0) {
+    fprintf(output, "[TERMINAL]\n");
+    fprintf(output, "%s\n", terminal.output);
   }
   fprintf(output, "[END OF SIMULATION]\n");
 
@@ -1359,25 +1419,85 @@ void softwareInterruption(uint32_t* R, char interruptionType[]) {
   }
 }
 
-void hardwareInterruption(uint32_t* R, InputOutputDevice device) {  
-  R[26] = device.interruptionCode;
-  R[29] = device.interruptionAddress >> 2;
+void hardwareInterruption(uint32_t* R, HardwareInterruption hardInt, char* intType, uint32_t interruptionAddress) {
+  char strTemp[4] = {0};
+  R[26] = hardInt.code;
+  R[27] = interruptionAddress;
+  R[29] = hardInt.address >> 2;
+  sprintf(strTemp, "%u", hardInt.type);
+  strcpy(intType, strTemp);
 }
 
-InputOutputDevice createDevice(uint8_t intType, uint32_t intCode, uint32_t intAddress, uint32_t address, uint32_t value) {
-  InputOutputDevice device;
+Watchdog createWatchdog(uint32_t address) {
+  Watchdog watchdog;
 
-  device.interruptionType = intType;
-  device.interruptionCode = intCode;
-  device.interruptionAddress = intAddress;
-  device.address = address;
-  device.value = value;
+  watchdog.address = address;
+  watchdog.value = 0;
 
-  return device;
+  return watchdog;
 }
 
-bool isDeviceAddress(uint32_t address, InputOutputDevice device) {
-  return (address >= device.address && address < device.address + 4);
+Terminal createTerminal(uint32_t address) {
+  Terminal terminal;
+
+  terminal.address = address;
+  terminal.value = 0;
+  terminal.input = 0;
+
+  return terminal;
+}
+
+FPURegister createFPURegister(uint32_t address) {
+  FPURegister fpu;
+
+  fpu.address = address;
+  fpu.value = 0;
+
+  return fpu;
+}
+
+FPURegisterControl createFPURegisterControl(uint32_t address) {
+  FPURegisterControl fpu;
+
+  fpu.address = address;
+  fpu.value = 0;
+  fpu.cycles = -1;
+  fpu.status = 0;
+  fpu.operation = fpu.value & 0x0000001F;
+  fpu.interruptionType = 0;
+
+  return fpu;
+}
+
+void writeInTerminal(Terminal* terminal, uint32_t value) {
+  char strTemp[2];
+
+  terminal->value = value;
+  sprintf(strTemp, "%c", (char) terminal->value);
+  strcat(terminal->output, strTemp);
+}
+
+void writeInFPU(FPURegister* fpuRegister, uint32_t value) {
+  uint32_t floatHex;
+
+  fpuRegister->value = value;
+  fpuRegister->floatValue = value;
+
+  memcpy(&floatHex, &fpuRegister->floatValue, sizeof(uint32_t));
+
+  fpuRegister->exponent = floatHex >> 23;
+  fpuRegister->fractional = floatHex & 0x007FFFFF;
+}
+
+void writeInFPUControl(FPURegisterControl* fpuControl, uint32_t value) {
+  uint32_t temp = 0xFFFFFFDF | (fpuControl->status << 5);
+
+  fpuControl->value = value & temp;
+  fpuControl->operation = value & 0x0000001F;
+}
+
+bool isDeviceAddress(uint32_t address, uint32_t deviceAddress) {
+  return (address >= deviceAddress && address < deviceAddress + 4);
 }
 
 uint32_t get4ByteAddress(uint32_t address) {
