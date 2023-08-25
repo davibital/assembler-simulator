@@ -32,7 +32,7 @@ typedef struct FPURegisterControl {
   uint32_t address;
   uint32_t value;
 
-  uint8_t cycles;
+  int8_t cycles;
   uint8_t status;
   uint8_t operation;
 
@@ -87,11 +87,15 @@ FPURegister createFPURegister(uint32_t address);
 
 FPURegisterControl createFPURegisterControl(uint32_t address);
 
-void writeInTerminal(Terminal* terminal, uint32_t value);
+void writeInWatchdog(Watchdog* watchdog, uint8_t numberOfBytes, uint32_t value, uint32_t address);
 
-void writeInFPU(FPURegister* FPURegister, uint32_t value);
+void writeInTerminal(Terminal* terminal, uint8_t numberOfBytes, uint32_t value, uint32_t address);
 
-void writeInFPUControl(FPURegisterControl* fpuControl, uint32_t value);
+void writeInFPU(FPURegister* FPURegister, uint8_t numberOfBytes, uint32_t value, uint32_t address);
+
+void writeInFPUControl(FPURegisterControl* fpuControl, uint8_t numberOfBytes, uint32_t value, uint32_t address);
+
+void writeInMemory(uint32_t* MEM, uint8_t numberOfBytes, uint32_t value, uint32_t address);
 
 void fpuOperation(FPURegisterControl* fpuControl, FPURegister* fpuOperandX, FPURegister* fpuOperandY, FPURegister* fpuResult);
 
@@ -169,64 +173,6 @@ int main (int argc, char* argv[]) {
         strcpy(interruptionType, "");
       }
     }
-    
-    
-    
-    char instruction[30] = {0};
-
-    uint8_t z = 0, x = 0, y = 0, l = 0, v = 0, w = 0, temp[5];
-    char RName[5], zName[5], xName[5], yName[5], lName[5];
-    int32_t xxyl = 0;
-    uint32_t oldPC = 0, oldSP = 0, xyl = 0, bytesValue, memAddress = 0;
-    char hexadecimals[55] = {0};
-    char registers[20] = {0};
-    i = 0;
-    
-    uint64_t uresult = 0;
-    int64_t result = 0;
-
-
-    char instruction[30] = {0};
-
-    uint8_t z = 0, x = 0, y = 0, l = 0, v = 0, w = 0, temp[5];
-    char RName[5], zName[5], xName[5], yName[5], lName[5];
-    int32_t xxyl = 0;
-    uint32_t oldPC = 0, oldSP = 0, xyl = 0, bytesValue, memAddress = 0;
-    char hexadecimals[55] = {0};
-    char registers[20] = {0};
-    i = 0;
-    
-    uint64_t uresult = 0;
-    int64_t result = 0;
-
-
-    
-    char instruction[30] = {0};
-
-    uint8_t z = 0, x = 0, y = 0, l = 0, v = 0, w = 0, temp[5];
-    char RName[5], zName[5], xName[5], yName[5], lName[5];
-    int32_t xxyl = 0;
-    uint32_t oldPC = 0, oldSP = 0, xyl = 0, bytesValue, memAddress = 0;
-    char hexadecimals[55] = {0};
-    char registers[20] = {0};
-    i = 0;
-    
-    uint64_t uresult = 0;
-    int64_t result = 0;
-
-
-    char instruction[30] = {0};
-
-    uint8_t z = 0, x = 0, y = 0, l = 0, v = 0, w = 0, temp[5];
-    char RName[5], zName[5], xName[5], yName[5], lName[5];
-    int32_t xxyl = 0;
-    uint32_t oldPC = 0, oldSP = 0, xyl = 0, bytesValue, memAddress = 0;
-    char hexadecimals[55] = {0};
-    char registers[20] = {0};
-    i = 0;
-    
-    uint64_t uresult = 0;
-    int64_t result = 0;
 
     R[28] = MEM32[R[29]];
 
@@ -685,8 +631,8 @@ int main (int argc, char* argv[]) {
 
         sprintf(instruction, "divi %s,%s,%i", zName, xName, i);
 
-        if (R[y] == 0) {
-          updateSR(&R[31], "ZD", R[y] == 0);
+        if (i == 0) {
+          updateSR(&R[31], "ZD", i == 0);
           if ((R[31] & 0x00000002) != 0) {
             interruptionSubRoutine(R, MEM32);
             interruptionAddress = oldPC;
@@ -697,7 +643,7 @@ int main (int argc, char* argv[]) {
         else {
           if (z != 0) R[z] = (int32_t)R[x] / (int32_t)i;
 
-      	  updateSR(&R[31], "ZD", R[y] == 0);
+      	  updateSR(&R[31], "ZD", i == 0);
           R[31] = R[31] & (~0x00000008);
           updateSR(&R[31], "ZN", R[z] == 0);
         }
@@ -748,18 +694,18 @@ int main (int argc, char* argv[]) {
         FTypeInstructionZXI(R, &z, &x, &i);
         
         memAddress = get4ByteAddress(R[x] + i);
-        
+
         if (z != 0) {
           if (isDeviceAddress(R[x] + i, watchdog.address))
             R[z] = getByte(1, watchdog.value, R[x] + i);
           else if (isDeviceAddress(R[x] + i, fpuOperandX.address))
-            R[z] = getByte(1, (uint32_t) fpuOperandX.value, R[x] + i);
+            R[z] = getByte(1, fpuOperandX.value, R[x] + i);
           else if (isDeviceAddress(R[x] + i, fpuOperandY.address))
-            R[z] = getByte(1, (uint32_t) fpuOperandY.value, R[x] + i);
+            R[z] = getByte(1, fpuOperandY.value, R[x] + i);
           else if (isDeviceAddress(R[x] + i, fpuResult.address))
-            R[z] = getByte(1, (uint32_t) fpuResult.value, R[x] + i);
+            R[z] = getByte(1, fpuResult.value, R[x] + i);
           else if (isDeviceAddress(R[x] + i, fpuControl.address))
-            R[z] = getByte(1, (uint32_t) fpuControl.value, R[x] + i);
+            R[z] = getByte(1, fpuControl.value, R[x] + i);
           else if (isDeviceAddress(R[x] + i, terminal.address))
             R[z] = getByte(1, terminal.value, R[x] + i);
           else
@@ -772,7 +718,7 @@ int main (int argc, char* argv[]) {
         sprintf(instruction, "l8 %s,[%s%s%i]", zName, xName, (i >= 0) ? "+" : "", i);
         toUpperCase(zName);
         toUpperCase(xName);
-        fprintf(output, "0x%08X:\t%-25s\t%s=MEM[0x%08X]=0x%02X\n", R[29], instruction, zName, memAddress, R[z]);
+        fprintf(output, "0x%08X:\t%-25s\t%s=MEM[0x%08X]=0x%02X\n", R[29], instruction, zName, R[x] + i, R[z]);
         break;
       case 0b011001:
         // l16
@@ -784,13 +730,13 @@ int main (int argc, char* argv[]) {
           if (isDeviceAddress((R[x] + i) << 1, watchdog.address))
             R[z] = getByte(2, watchdog.value, (R[x] + i) << 1);
           else if (isDeviceAddress((R[x] + i) << 1, fpuOperandX.address))
-            R[z] = getByte(2, (uint32_t) fpuOperandX.value, (R[x] + i) << 1);
+            R[z] = getByte(2, fpuOperandX.value, (R[x] + i) << 1);
           else if (isDeviceAddress((R[x] + i) << 1, fpuOperandY.address))
-            R[z] = getByte(2, (uint32_t) fpuOperandY.value, (R[x] + i) << 1);
+            R[z] = getByte(2, fpuOperandY.value, (R[x] + i) << 1);
           else if (isDeviceAddress((R[x] + i) << 1, fpuResult.address))
-            R[z] = getByte(2, (uint32_t) fpuResult.value, (R[x] + i) << 1);
+            R[z] = getByte(2, fpuResult.value, (R[x] + i) << 1);
           else if (isDeviceAddress((R[x] + i) << 1, fpuControl.address))
-            R[z] = getByte(2, (uint32_t) fpuControl.value, (R[x] + i) << 1);
+            R[z] = getByte(2, fpuControl.value, (R[x] + i) << 1);
           else if (isDeviceAddress((R[x] + i) << 1, terminal.address))
             R[z] = getByte(2, terminal.value, (R[x] + i) << 1);
           else
@@ -841,22 +787,39 @@ int main (int argc, char* argv[]) {
         FTypeInstructionZXI(R, &z, &x, &i);
 
         memAddress = get4ByteAddress(R[x] + i);
-        bytesValue = getByte(1, R[z], R[x] + i);
 
-        if (isDeviceAddress(R[x] + i, watchdog.address))
-          watchdog.value = bytesValue;
-        else if (isDeviceAddress(R[x] + i, fpuOperandX.address))
-          writeInFPU(&fpuOperandX, bytesValue);
-        else if (isDeviceAddress(R[x] + i, fpuOperandY.address))
-          writeInFPU(&fpuOperandY, bytesValue);
-        else if (isDeviceAddress(R[x] + i, fpuResult.address))
-          writeInFPU(&fpuResult, bytesValue);
-        else if (isDeviceAddress(R[x] + i, fpuControl.address))
-          writeInFPUControl(&fpuControl, bytesValue);
-        else if (isDeviceAddress(R[x] + i, terminal.address))
-          writeInTerminal(&terminal, bytesValue);
+        if (isDeviceAddress(R[x] + i, watchdog.address)) {
+          
+          writeInWatchdog(&watchdog, 1, R[z], R[x] + i);
+        
+        }
+        else if (isDeviceAddress(R[x] + i, fpuOperandX.address)) {
+          
+          writeInFPU(&fpuOperandX, 1, R[z], R[x] + i);
+        
+        }
+        else if (isDeviceAddress(R[x] + i, fpuOperandY.address)) {
+          
+          writeInFPU(&fpuOperandY, 1, R[z], R[x] + i);
+        
+        }
+        else if (isDeviceAddress(R[x] + i, fpuResult.address)) {
+          
+          writeInFPU(&fpuResult, 1, R[z], R[x] + i);
+        
+        }
+        else if (isDeviceAddress(R[x] + i, fpuControl.address)) {
+          
+          writeInFPUControl(&fpuControl, 1, R[z], R[x] + i);
+        
+        }
+        else if (isDeviceAddress(R[x] + i, terminal.address)) {
+          
+          writeInTerminal(&terminal, 1, R[z], R[x] + i);
+        
+        }
         else
-          MEM32[memAddress >> 2] = bytesValue;
+          writeInMemory(MEM32, 1, R[z], R[x] + i);
 
         formatR(zName, z);
         formatR(xName, x);
@@ -864,29 +827,46 @@ int main (int argc, char* argv[]) {
         sprintf(instruction, "s8 [%s%s%i],%s", xName, (i >= 0) ? "+": "", i, zName);
         toUpperCase(zName);
         toUpperCase(xName);
-        fprintf(output, "0x%08X:\t%-25s\tMEM[0x%08X]=%s=0x%02X\n", R[29], instruction, R[x] + i, zName, bytesValue);
+        fprintf(output, "0x%08X:\t%-25s\tMEM[0x%08X]=%s=0x%02X\n", R[29], instruction, R[x] + i, zName, R[z]);
         break;
       case 0b011100:
         // s16
         FTypeInstructionZXI(R, &z, &x, &i);
 
         memAddress = get4ByteAddress((R[x] + i) << 1);
-        bytesValue = getByte(2, R[z], (R[x] + i) << 1);
 
-        if (isDeviceAddress((R[x] + i) << 1, watchdog.address))
-          watchdog.value = bytesValue;
-        else if (isDeviceAddress((R[x] + i) << 1, fpuOperandX.address))
-          writeInFPU(&fpuOperandX, bytesValue);
-        else if (isDeviceAddress((R[x] + i) << 1, fpuOperandY.address))
-          writeInFPU(&fpuOperandY, bytesValue);
-        else if (isDeviceAddress((R[x] + i) << 1, fpuResult.address))
-          writeInFPU(&fpuResult, bytesValue);
-        else if (isDeviceAddress((R[x] + i) << 1, fpuControl.address))
-          writeInFPUControl(&fpuControl, bytesValue);
-        else if (isDeviceAddress((R[x] + i) << 1, terminal.address))
-          writeInTerminal(&terminal , bytesValue);
+        if (isDeviceAddress((R[x] + i) << 1, watchdog.address)) {
+          
+          writeInWatchdog(&watchdog, 2, R[z], (R[x] + i) << 1);
+
+        }
+        else if (isDeviceAddress((R[x] + i) << 1, fpuOperandX.address)) {
+          
+          writeInFPU(&fpuOperandX, 2, R[z], (R[x] + i) << 1);
+
+        }
+        else if (isDeviceAddress((R[x] + i) << 1, fpuOperandY.address)) {
+          
+          writeInFPU(&fpuOperandY, 2, R[z], (R[x] + i) << 1);
+
+        }
+        else if (isDeviceAddress((R[x] + i) << 1, fpuResult.address)) {
+          
+          writeInFPU(&fpuResult, 2, R[z], (R[x] + i) << 1);
+
+        }
+        else if (isDeviceAddress((R[x] + i) << 1, fpuControl.address)) {
+          
+          writeInFPUControl(&fpuControl, 2, R[z], (R[x] + i) << 1);
+
+        }
+        else if (isDeviceAddress((R[x] + i) << 1, terminal.address)) {
+          
+          writeInTerminal(&terminal, 2, R[z], (R[x] + i) << 1);
+
+        }
         else
-          MEM32[memAddress >> 2] = bytesValue;
+          writeInMemory(MEM32, 2, R[z], (R[x] + i) << 1);
 
         formatR(zName, z);
         formatR(xName, x);
@@ -902,18 +882,36 @@ int main (int argc, char* argv[]) {
 
         memAddress = get4ByteAddress((R[x] + i) << 2);
 
-        if (isDeviceAddress((R[x] + i) << 2, watchdog.address))
-          watchdog.value = R[z];
-        else if (isDeviceAddress((R[x] + i) << 2, fpuOperandX.address)) 
-          writeInFPU(&fpuOperandX, R[z]);
-        else if (isDeviceAddress((R[x] + i) << 2, fpuOperandY.address))
-          writeInFPU(&fpuOperandY, R[z]);
-        else if (isDeviceAddress((R[x] + i) << 2, fpuResult.address))
-          writeInFPU(&fpuResult, R[z]);
-        else if (isDeviceAddress((R[x] + i) << 2, fpuControl.address))
-          writeInFPUControl(&fpuControl, R[z]);
-        else if (isDeviceAddress((R[x] + i) << 2, terminal.address))
-          writeInTerminal(&terminal, R[z]);
+        if (isDeviceAddress((R[x] + i) << 2, watchdog.address)) {
+
+          writeInWatchdog(&watchdog, 4, R[z], (R[x] + i) << 2);
+
+        }
+        else if (isDeviceAddress((R[x] + i) << 2, fpuOperandX.address)) {
+          
+          writeInFPU(&fpuOperandX, 4, R[z], (R[x] + i) << 2);
+
+        }
+        else if (isDeviceAddress((R[x] + i) << 2, fpuOperandY.address)) {
+          
+          writeInFPU(&fpuOperandY, 4, R[z], (R[x] + i) << 2);
+
+        }
+        else if (isDeviceAddress((R[x] + i) << 2, fpuResult.address)) {
+          
+          writeInFPU(&fpuResult, 4, R[z], (R[x] + i) << 2);
+
+        }
+        else if (isDeviceAddress((R[x] + i) << 2, fpuControl.address)) {
+          
+          writeInFPUControl(&fpuControl, 4, R[z], (R[x] + i) << 2);
+
+        }
+        else if (isDeviceAddress((R[x] + i) << 2, terminal.address)) {
+          
+          writeInTerminal(&terminal, 4, R[z], (R[x] + i) << 2);
+
+        }
         else
           MEM32[memAddress >> 2] = R[z];
 
@@ -1508,13 +1506,13 @@ void softwareInterruption(uint32_t* R, char interruptionType[]) {
   if (strcmp(interruptionType, "zd") == 0) {
     R[26] = 0;
     R[27] = R[29];
-    R[29] = 0x00000004 >> 2;
+    R[29] = 0x00000008 >> 2;
   }
   // invalid instruction
   else if (strcmp(interruptionType, "iv") == 0) {
     R[26] = (R[28] & 0xFC000000) >> 26;
     R[27] = R[29];
-    R[29] = 0x00000000;
+    R[29] = 0x00000004 >> 2;
   }
 }
 
@@ -1568,19 +1566,85 @@ FPURegisterControl createFPURegisterControl(uint32_t address) {
   return fpu;
 }
 
-void writeInTerminal(Terminal* terminal, uint32_t value) {
-  char strTemp[2];
+void writeInWatchdog(Watchdog* watchdog, uint8_t numberOfBytes, uint32_t value, uint32_t address) {
+  uint8_t position = 3 - (address % 4);
+  uint32_t writingValue, bytes, temp;
 
-  terminal->value = value;
+  if (numberOfBytes == 1) {
+    temp = ~(0x000000FF << (position * 8));
+    // reset byte of watchdog value
+    watchdog->value = watchdog->value & temp;
+    bytes = value & 0x000000FF;
+    bytes = bytes << (position * 8);
+    writingValue = watchdog->value | bytes;
+  } else if (numberOfBytes == 2) {
+    temp = ~(0x0000FFFF << (position * 8));
+    // reset byte of watchdog value
+    watchdog->value = watchdog->value & temp;
+    bytes = value & 0x0000FFFF;
+    bytes = bytes << (position * 8);
+    writingValue = watchdog->value | bytes;
+  } else {
+    writingValue = value;
+  }
+
+  watchdog->value = writingValue;
+}
+
+void writeInTerminal(Terminal* terminal, uint8_t numberOfBytes, uint32_t value, uint32_t address) {
+  char strTemp[2];
+  uint8_t position = 3 - (address % 4);
+  uint32_t writingValue, bytes, temp;
+
+  if (numberOfBytes == 1) {
+    temp = ~(0x000000FF << (position * 8));
+    // reset byte of terminal value
+    terminal->value = terminal->value & temp;
+    bytes = value & 0x000000FF;
+    bytes = bytes << (position * 8);
+    writingValue = terminal->value | bytes;
+  } else if (numberOfBytes == 2) {
+    temp = ~(0x0000FFFF << (position * 8));
+    // reset byte of terminal value
+    terminal->value = terminal->value & temp;
+    bytes = value & 0x0000FFFF;
+    bytes = bytes << (position * 8);
+    writingValue = terminal->value | bytes;
+  } else {
+    writingValue = value;
+  }
+
+  terminal->value = writingValue;
+
   sprintf(strTemp, "%c", (char) terminal->value);
   strcat(terminal->output, strTemp);
 }
 
-void writeInFPU(FPURegister* fpuRegister, uint32_t value) {
+void writeInFPU(FPURegister* fpuRegister, uint8_t numberOfBytes, uint32_t value, uint32_t address) {
+  uint8_t position = 3 - (address % 4);
+  uint32_t writingValue, bytes, temp;
   uint32_t floatHex;
 
-  fpuRegister->value = value;
-  fpuRegister->floatValue = value;
+  if (numberOfBytes == 1) {
+    temp = ~(0x000000FF << (position * 8));
+    // reset byte of fpu value
+    fpuRegister->value = fpuRegister->value & temp;
+    bytes = value & 0x000000FF;
+    bytes = bytes << (position * 8);
+    writingValue = fpuRegister->value | bytes;
+  } else if (numberOfBytes == 2) {
+    temp = ~(0x0000FFFF << (position * 8));
+    // reset byte of fpu value
+    fpuRegister->value = fpuRegister->value & temp;
+    bytes = value & 0x0000FFFF;
+    bytes = bytes << (position * 8);
+    writingValue = fpuRegister->value | bytes;
+  } else {
+    writingValue = value;
+  }
+
+  fpuRegister->value = writingValue;
+  fpuRegister->floatValue = writingValue;
 
   memcpy(&floatHex, &fpuRegister->floatValue, sizeof(uint32_t));
 
@@ -1588,11 +1652,58 @@ void writeInFPU(FPURegister* fpuRegister, uint32_t value) {
   fpuRegister->fractional = floatHex & 0x007FFFFF;
 }
 
-void writeInFPUControl(FPURegisterControl* fpuControl, uint32_t value) {
-  uint32_t temp = 0xFFFFFFDF | (fpuControl->status << 5);
+void writeInFPUControl(FPURegisterControl* fpuControl, uint8_t numberOfBytes, uint32_t value, uint32_t address) {
+  uint8_t position = 3 - (address % 4);
+  uint32_t writingValue, bytes, temp;
 
-  fpuControl->value = value & temp;
-  fpuControl->operation = value & 0x0000001F;
+  if (numberOfBytes == 1) {
+    temp = ~(0x000000FF << (position * 8));
+    // reset byte of fpu value
+    fpuControl->value = fpuControl->value & temp;
+    bytes = value & 0x000000FF;
+    bytes = bytes << (position * 8);
+    writingValue = fpuControl->value | bytes;
+  } else if (numberOfBytes == 2) {
+    temp = ~(0x0000FFFF << (position * 8));
+    // reset byte of fpu value
+    fpuControl->value = fpuControl->value & temp;
+    bytes = value & 0x0000FFFF;
+    bytes = bytes << (position * 8);
+    writingValue = fpuControl->value | bytes;
+  } else {
+    writingValue = value;
+  }
+
+  uint32_t temp2 = 0xFFFFFFDF | (fpuControl->status << 5);
+
+  fpuControl->value = writingValue & temp2;
+  fpuControl->operation = writingValue & 0x0000001F;
+}
+
+void writeInMemory(uint32_t* MEM, uint8_t numberOfBytes, uint32_t value, uint32_t address) {
+  uint32_t memAddress = address - (address % 4);
+  uint8_t position = 3 - (address % 4);
+  uint32_t writingValue, bytes, temp;
+
+  if (numberOfBytes == 1) {
+    temp = ~(0x000000FF << (position * 8));
+    // reset byte of mem value
+    MEM[memAddress >> 2] = MEM[memAddress >> 2] & temp;
+    bytes = value & 0x000000FF;
+    bytes = bytes << (position * 8);
+    writingValue = MEM[memAddress >> 2] | bytes;
+  } else if (numberOfBytes == 2) {
+    temp = ~(0x0000FFFF << (position * 8));
+    // reset byte of mem value
+    MEM[memAddress >> 2] = MEM[memAddress >> 2] & temp;
+    bytes = value & 0x0000FFFF;
+    bytes = bytes << (position * 8);
+    writingValue = MEM[memAddress >> 2] | bytes;
+  } else {
+    writingValue = value;
+  }
+
+  MEM[memAddress >> 2] = writingValue;
 }
 
 void fpuOperation(FPURegisterControl* fpuControl, FPURegister* fpuOperandX, FPURegister* fpuOperandY, FPURegister* fpuResult) {
@@ -1636,7 +1747,7 @@ void fpuOperation(FPURegisterControl* fpuControl, FPURegister* fpuOperandX, FPUR
       break;
     case 0b00101:
       temp = fpuResult->floatValue;
-      writeInFPU(fpuOperandX, temp);
+      writeInFPU(fpuOperandX, 4, fpuOperandX->address, temp);
       fpuOperandX->value = fpuResult->value;
       fpuControl->cycles = 1;
       fpuControl->interruptionType = 4;
@@ -1644,7 +1755,7 @@ void fpuOperation(FPURegisterControl* fpuControl, FPURegister* fpuOperandX, FPUR
       break;
     case 0b00110:
       temp = fpuResult->floatValue;
-      writeInFPU(fpuOperandY, temp);
+      writeInFPU(fpuOperandY, 4, fpuOperandY->address, temp);
       fpuOperandY->value = fpuResult->value;
       fpuControl->cycles = 1;
       fpuControl->interruptionType = 4;
