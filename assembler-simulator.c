@@ -10,6 +10,8 @@
 typedef struct Watchdog {
   uint32_t address;
   uint32_t value;
+
+  bool interruptionIsPending;
 } Watchdog;
 
 typedef struct Terminal {
@@ -915,6 +917,7 @@ int main (int argc, char* argv[]) {
         else
           MEM32[memAddress >> 2] = R[z];
 
+
         formatR(zName, z);
         formatR(xName, x);
 
@@ -1272,16 +1275,23 @@ int main (int argc, char* argv[]) {
     }
 
     if (watchdog.value >> 31 == 0b1) {
+      watchdog.value--;
       if (watchdog.value << 1 == 0) {
+        watchdog.value = 0;
+        watchdog.interruptionIsPending = true;
+      }
+    }
+
+    if ((R[31] & 0x00000002) != 0) {
+      if (watchdog.interruptionIsPending) {
         interruptionSubRoutine(R, MEM32);
         interruptionAddress = oldPC;
         hadHardwareInterruption = true;
         hardInt.type = 1;
         hardInt.code = 0xE1AC04DA;
         hardInt.address = 0x00000010;
-        watchdog.value = 0;
+        watchdog.interruptionIsPending = false;
       }
-      watchdog.value--;
     }
 
     fpuOperation(&fpuControl, &fpuOperandX, &fpuOperandY, &fpuResult);
@@ -1530,6 +1540,7 @@ Watchdog createWatchdog(uint32_t address) {
 
   watchdog.address = address;
   watchdog.value = 0;
+  watchdog.interruptionIsPending = false;
 
   return watchdog;
 }
