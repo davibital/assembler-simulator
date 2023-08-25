@@ -171,6 +171,36 @@ int main (int argc, char* argv[]) {
     }
     
     
+    
+    char instruction[30] = {0};
+
+    uint8_t z = 0, x = 0, y = 0, l = 0, v = 0, w = 0, temp[5];
+    char RName[5], zName[5], xName[5], yName[5], lName[5];
+    int32_t xxyl = 0;
+    uint32_t oldPC = 0, oldSP = 0, xyl = 0, bytesValue, memAddress = 0;
+    char hexadecimals[55] = {0};
+    char registers[20] = {0};
+    i = 0;
+    
+    uint64_t uresult = 0;
+    int64_t result = 0;
+
+
+    char instruction[30] = {0};
+
+    uint8_t z = 0, x = 0, y = 0, l = 0, v = 0, w = 0, temp[5];
+    char RName[5], zName[5], xName[5], yName[5], lName[5];
+    int32_t xxyl = 0;
+    uint32_t oldPC = 0, oldSP = 0, xyl = 0, bytesValue, memAddress = 0;
+    char hexadecimals[55] = {0};
+    char registers[20] = {0};
+    i = 0;
+    
+    uint64_t uresult = 0;
+    int64_t result = 0;
+
+
+    
     char instruction[30] = {0};
 
     uint8_t z = 0, x = 0, y = 0, l = 0, v = 0, w = 0, temp[5];
@@ -1605,14 +1635,16 @@ void fpuOperation(FPURegisterControl* fpuControl, FPURegister* fpuOperandX, FPUR
       }
       break;
     case 0b00101:
-      writeInFPU(fpuOperandX, (uint32_t) fpuResult->floatValue);
+      temp = fpuResult->floatValue;
+      writeInFPU(fpuOperandX, temp);
       fpuOperandX->value = fpuResult->value;
       fpuControl->cycles = 1;
       fpuControl->interruptionType = 4;
       fpuControl->status = 0;
       break;
     case 0b00110:
-      writeInFPU(fpuOperandY, (uint32_t) fpuResult->floatValue);
+      temp = fpuResult->floatValue;
+      writeInFPU(fpuOperandY, temp);
       fpuOperandY->value = fpuResult->value;
       fpuControl->cycles = 1;
       fpuControl->interruptionType = 4;
@@ -1621,15 +1653,15 @@ void fpuOperation(FPURegisterControl* fpuControl, FPURegister* fpuOperandX, FPUR
     case 0b00111:
       // teto
       temp = fpuResult->floatValue + 1;
-      writeInFPU(fpuResult, temp);
+      fpuResult->value = temp;
       fpuControl->cycles = 1;
       fpuControl->interruptionType = 4;
       fpuControl->status = 0;
       break;
     case 0b01000:
       // piso
-      temp = fpuResult->floatValue - 1;
-      writeInFPU(fpuResult, temp);
+      temp = fpuResult->floatValue;
+      fpuResult->value = temp;
       fpuControl->cycles = 1;
       fpuControl->interruptionType = 4;
       fpuControl->status = 0;
@@ -1639,7 +1671,7 @@ void fpuOperation(FPURegisterControl* fpuControl, FPURegister* fpuOperandX, FPUR
       temp = fpuResult->floatValue;
       if ((fpuResult->floatValue - temp) >= 5)
         temp++;
-      writeInFPU(fpuResult, temp);
+      fpuResult->value = temp;
       fpuControl->cycles = 1;
       fpuControl->interruptionType = 4;
       fpuControl->status = 0;
