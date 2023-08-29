@@ -99,6 +99,8 @@ void writeInFPUControl(FPURegisterControl* fpuControl, uint8_t numberOfBytes, ui
 
 void writeInMemory(uint32_t* MEM, uint8_t numberOfBytes, uint32_t value, uint32_t address);
 
+void countFpuCycles(FPURegisterControl* fpuControl, FPURegister* fpuOperandX, FPURegister* fpuOperandY);
+
 void fpuOperation(FPURegisterControl* fpuControl, FPURegister* fpuOperandX, FPURegister* fpuOperandY, FPURegister* fpuResult);
 
 bool isDeviceAddress(uint32_t address, uint32_t deviceAddress);
@@ -113,6 +115,17 @@ int main (int argc, char* argv[]) {
 
   uint32_t R[32] = {0};
   
+
+  bool hadHardwareInterruption = false;
+  bool hadSoftwareInterruption = false;
+  uint32_t interruptionAddress = 0;
+  char interruptionType[4] = {0};
+  int32_t i = 0;
+
+  uint32_t* MEM32 = (uint32_t*)(calloc(8, 1024));
+ 
+  getFileInstructions(input, MEM32);
+  
   Terminal terminal;
   Watchdog watchdog;
   FPURegister fpuOperandX, fpuOperandY, fpuResult;
@@ -125,16 +138,6 @@ int main (int argc, char* argv[]) {
   fpuResult = createFPURegister(0x80808888);
   fpuControl = createFPURegisterControl(0x8080888C);
   terminal = createTerminal(0x88888888);
-
-  bool hadHardwareInterruption = false;
-  bool hadSoftwareInterruption = false;
-  uint32_t interruptionAddress = 0;
-  char interruptionType[4] = {0};
-  int32_t i = 0;
-
-  uint32_t* MEM32 = (uint32_t*)(calloc(8, 1024));
- 
-  getFileInstructions(input, MEM32);
 
   fprintf(output, "[START OF SIMULATION]\n");
   uint8_t running = 1;
@@ -154,11 +157,36 @@ int main (int argc, char* argv[]) {
     uint64_t uresult = 0;
     int64_t result = 0;
 
+    if (watchdog.value >> 31 == 0b1) {
+      watchdog.value--;
+      if (watchdog.value << 1 == 0) {
+        watchdog.value = 0;
+        watchdog.interruptionIsPending = true;
+      } 
+    }
+
     if (fpuControl.cycles > 0)
       fpuControl.cycles--;
 
     if ((R[31] & 0x00000002) != 0) {
       if (hadHardwareInterruption) {
+
+        if (hardInt.code == 0x01EEE754) {
+          fpuOperation(&fpuControl, &fpuOperandX, &fpuOperandY, &fpuResult);
+
+          hardInt.type = fpuControl.interruptionType;
+          switch(hardInt.type) {
+            case 2:
+              hardInt.address = 0x00000014;
+              break;
+            case 3:
+              hardInt.address = 0x00000018;
+              break;
+            case 4:
+              hardInt.address = 0x0000001C;
+              break;
+          }
+        }
 
         hardwareInterruption(R, hardInt, interruptionType, interruptionAddress);
 
@@ -813,6 +841,7 @@ int main (int argc, char* argv[]) {
         else if (isDeviceAddress(R[x] + i, fpuControl.address)) {
           
           writeInFPUControl(&fpuControl, 1, R[z], R[x] + i);
+          countFpuCycles(&fpuControl, &fpuOperandX, &fpuOperandY);
         
         }
         else if (isDeviceAddress(R[x] + i, terminal.address)) {
@@ -860,6 +889,7 @@ int main (int argc, char* argv[]) {
         else if (isDeviceAddress((R[x] + i) << 1, fpuControl.address)) {
           
           writeInFPUControl(&fpuControl, 2, R[z], (R[x] + i) << 1);
+          countFpuCycles(&fpuControl, &fpuOperandX, &fpuOperandY);
 
         }
         else if (isDeviceAddress((R[x] + i) << 1, terminal.address)) {
@@ -907,6 +937,7 @@ int main (int argc, char* argv[]) {
         else if (isDeviceAddress((R[x] + i) << 2, fpuControl.address)) {
           
           writeInFPUControl(&fpuControl, 4, R[z], (R[x] + i) << 2);
+          countFpuCycles(&fpuControl, &fpuOperandX, &fpuOperandY);
 
         }
         else if (isDeviceAddress((R[x] + i) << 2, terminal.address)) {
@@ -1274,14 +1305,6 @@ int main (int argc, char* argv[]) {
         break;
     }
 
-    if (watchdog.value >> 31 == 0b1) {
-      watchdog.value--;
-      if (watchdog.value << 1 == 0) {
-        watchdog.value = 0;
-        watchdog.interruptionIsPending = true;
-      }
-    }
-
     if ((R[31] & 0x00000002) != 0) {
       if (watchdog.interruptionIsPending) {
         interruptionSubRoutine(R, MEM32);
@@ -1294,26 +1317,12 @@ int main (int argc, char* argv[]) {
       }
     }
 
-    fpuOperation(&fpuControl, &fpuOperandX, &fpuOperandY, &fpuResult);
-
     if (fpuControl.cycles == 0) {
       interruptionSubRoutine(R, MEM32);
       interruptionAddress = oldPC;
       hadHardwareInterruption = true;
-      fpuControl.cycles = -1;
-      hardInt.type = fpuControl.interruptionType;
       hardInt.code = 0x01EEE754;
-      switch(hardInt.type) {
-        case 2:
-          hardInt.address = 0x00000014;
-          break;
-        case 3:
-          hardInt.address = 0x00000018;
-          break;
-        case 4:
-          hardInt.address = 0x0000001C;
-          break;
-      }
+      fpuControl.cycles = -1;
     }
 
     R[29] = (R[29] + 4) >> 2;
@@ -1717,14 +1726,19 @@ void writeInMemory(uint32_t* MEM, uint8_t numberOfBytes, uint32_t value, uint32_
   MEM[memAddress >> 2] = writingValue;
 }
 
+void countFpuCycles(FPURegisterControl* fpuControl, FPURegister* fpuOperandX, FPURegister* fpuOperandY) {
+  if (fpuControl->operation >= 0b00001 && fpuControl->operation <= 0b00100)
+    fpuControl->cycles = abs((fpuOperandX->exponent - fpuOperandY->exponent)) + 1;
+  else
+    fpuControl->cycles = 1;
+}
+
 void fpuOperation(FPURegisterControl* fpuControl, FPURegister* fpuOperandX, FPURegister* fpuOperandY, FPURegister* fpuResult) {
   if (fpuControl->operation == 0) return;
 
   uint32_t temp;
   float x = fpuOperandX->floatValue;
   float y = fpuOperandY->floatValue;
-
-  fpuControl->cycles = abs((fpuOperandX->exponent - fpuOperandY->exponent)) + 1;
 
   switch (fpuControl->operation) {
     case 0b00001:
@@ -1760,7 +1774,6 @@ void fpuOperation(FPURegisterControl* fpuControl, FPURegister* fpuOperandX, FPUR
       temp = fpuResult->floatValue;
       writeInFPU(fpuOperandX, 4, fpuOperandX->address, temp);
       fpuOperandX->value = fpuResult->value;
-      fpuControl->cycles = 1;
       fpuControl->interruptionType = 4;
       fpuControl->status = 0;
       break;
@@ -1768,7 +1781,6 @@ void fpuOperation(FPURegisterControl* fpuControl, FPURegister* fpuOperandX, FPUR
       temp = fpuResult->floatValue;
       writeInFPU(fpuOperandY, 4, fpuOperandY->address, temp);
       fpuOperandY->value = fpuResult->value;
-      fpuControl->cycles = 1;
       fpuControl->interruptionType = 4;
       fpuControl->status = 0;
       break;
@@ -1776,7 +1788,6 @@ void fpuOperation(FPURegisterControl* fpuControl, FPURegister* fpuOperandX, FPUR
       // teto
       temp = fpuResult->floatValue + 1;
       fpuResult->value = temp;
-      fpuControl->cycles = 1;
       fpuControl->interruptionType = 4;
       fpuControl->status = 0;
       break;
@@ -1784,7 +1795,6 @@ void fpuOperation(FPURegisterControl* fpuControl, FPURegister* fpuOperandX, FPUR
       // piso
       temp = fpuResult->floatValue;
       fpuResult->value = temp;
-      fpuControl->cycles = 1;
       fpuControl->interruptionType = 4;
       fpuControl->status = 0;
       break;
@@ -1794,12 +1804,10 @@ void fpuOperation(FPURegisterControl* fpuControl, FPURegister* fpuOperandX, FPUR
       if ((fpuResult->floatValue - temp) >= 5)
         temp++;
       fpuResult->value = temp;
-      fpuControl->cycles = 1;
       fpuControl->interruptionType = 4;
       fpuControl->status = 0;
       break;
     default:
-      fpuControl->cycles = 1;
       fpuControl->status = 1;
       fpuControl->interruptionType = 2;
       break;
