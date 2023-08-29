@@ -18,7 +18,10 @@ typedef struct Terminal {
   uint32_t address;
   uint32_t value;
   uint8_t input;
-  char output[256];
+
+  char* output;
+  int maxSize;
+  int currentSize;
 } Terminal;
 
 typedef struct FPURegister {
@@ -92,6 +95,8 @@ FPURegisterControl createFPURegisterControl(uint32_t address);
 void writeInWatchdog(Watchdog* watchdog, uint8_t numberOfBytes, uint32_t value, uint32_t address);
 
 void writeInTerminal(Terminal* terminal, uint8_t numberOfBytes, uint32_t value, uint32_t address);
+
+char* doubleTerminalSize(char* terminalOutput, int currentMaxSize);
 
 void writeInFPU(FPURegister* FPURegister, uint8_t numberOfBytes, uint32_t value, uint32_t address);
 
@@ -1332,8 +1337,10 @@ int main (int argc, char* argv[]) {
     fprintf(output, "[TERMINAL]\n");
     fprintf(output, "%s\n", terminal.output);
   }
+
   fprintf(output, "[END OF SIMULATION]\n");
 
+  free(terminal.output);
   fclose(input);
 	fclose(output);
   free(MEM32);
@@ -1561,6 +1568,10 @@ Terminal createTerminal(uint32_t address) {
   terminal.value = 0;
   terminal.input = 0;
 
+  terminal.output = (char*)(malloc(200 * sizeof(char)));
+  terminal.maxSize = 200;
+  terminal.currentSize = 0;
+
   return terminal;
 }
 
@@ -1612,6 +1623,11 @@ void writeInWatchdog(Watchdog* watchdog, uint8_t numberOfBytes, uint32_t value, 
 }
 
 void writeInTerminal(Terminal* terminal, uint8_t numberOfBytes, uint32_t value, uint32_t address) {
+  if (terminal->currentSize == terminal->maxSize) {
+    terminal->output = doubleTerminalSize(terminal->output, terminal->maxSize);
+    terminal->maxSize *= 2;
+  }
+
   char strTemp[2];
   uint8_t position = 3 - (address % 4);
   uint32_t writingValue, bytes, temp;
@@ -1638,6 +1654,18 @@ void writeInTerminal(Terminal* terminal, uint8_t numberOfBytes, uint32_t value, 
 
   sprintf(strTemp, "%c", (char) terminal->value);
   strcat(terminal->output, strTemp);
+
+  terminal->currentSize++;
+}
+
+char* doubleTerminalSize(char* terminalOutput, int currentMaxSize) {
+  char* newTerminal = (char*)(malloc(currentMaxSize * 2 * sizeof(char)));
+
+  for (int i = 0; i <= currentMaxSize; i++)
+    newTerminal[i] = terminalOutput[i];
+
+  free(terminalOutput);
+  return newTerminal;
 }
 
 void writeInFPU(FPURegister* fpuRegister, uint8_t numberOfBytes, uint32_t value, uint32_t address) {
