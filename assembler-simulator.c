@@ -365,7 +365,7 @@ int main (int argc, char* argv[]) {
             break;
           case 0b011:
             // sla
-            int64_t sla = signalExtension64(R[z]) << 32 | signalExtension64(R[y]);
+            int64_t sla = signalExtension64(R[z]) << 32 | (signalExtension64(R[y]) & 0xFFFFFFFF);
             sla = sla << (l + 1);
             if (x != 0) R[x] = sla;
             if (z != 0) R[z] = sla >> 32;
@@ -479,7 +479,7 @@ int main (int argc, char* argv[]) {
             break;
           case 0b111:
             // sra
-            int64_t sra = signalExtension64(R[z]) << 32 | signalExtension64(R[y]);
+            int64_t sra = signalExtension64(R[z]) << 32 | (signalExtension64(R[y]) & 0xFFFFFFFF);
             sra = (sra >> (l + 1));
             if (x != 0) R[x] = sra;
             if (z != 0) R[z] = sra >> 32;
