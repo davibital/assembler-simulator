@@ -153,7 +153,7 @@ int main (int argc, char* argv[]) {
     uint8_t z = 0, x = 0, y = 0, l = 0, v = 0, w = 0, temp[5];
     char RName[5], zName[5], xName[5], yName[5], lName[5];
     int32_t xxyl = 0;
-    uint32_t oldSP = 0, xyl = 0, memAddress = 0, oldPC = R[29] << 2;
+    uint32_t oldSP = 0, xyl = 0, memBlockAddress = 0, memAddress = 0, oldPC = R[29] << 2;
     char hexadecimals[55] = {0};
     char registers[20] = {0};
     i = 0;
@@ -727,23 +727,24 @@ int main (int argc, char* argv[]) {
         // l8
         FTypeInstructionZXI(R, &z, &x, &i);
         
-        memAddress = get4ByteAddress(R[x] + i);
+        memAddress = R[x] + i;
+        memBlockAddress = get4ByteAddress(memAddress);
 
         if (z != 0) {
-          if (isDeviceAddress(R[x] + i, watchdog.address))
-            R[z] = getByte(1, watchdog.value, R[x] + i);
-          else if (isDeviceAddress(R[x] + i, fpuOperandX.address))
-            R[z] = getByte(1, fpuOperandX.value, R[x] + i);
-          else if (isDeviceAddress(R[x] + i, fpuOperandY.address))
-            R[z] = getByte(1, fpuOperandY.value, R[x] + i);
-          else if (isDeviceAddress(R[x] + i, fpuResult.address))
-            R[z] = getByte(1, fpuResult.value, R[x] + i);
-          else if (isDeviceAddress(R[x] + i, fpuControl.address))
-            R[z] = getByte(1, fpuControl.value, R[x] + i);
-          else if (isDeviceAddress(R[x] + i, terminal.address))
-            R[z] = getByte(1, terminal.value, R[x] + i);
+          if (isDeviceAddress(memAddress, watchdog.address))
+            R[z] = getByte(1, watchdog.value, memAddress);
+          else if (isDeviceAddress(memAddress, fpuOperandX.address))
+            R[z] = getByte(1, fpuOperandX.value, memAddress);
+          else if (isDeviceAddress(memAddress, fpuOperandY.address))
+            R[z] = getByte(1, fpuOperandY.value, memAddress);
+          else if (isDeviceAddress(memAddress, fpuResult.address))
+            R[z] = getByte(1, fpuResult.value, memAddress);
+          else if (isDeviceAddress(memAddress, fpuControl.address))
+            R[z] = getByte(1, fpuControl.value, memAddress);
+          else if (isDeviceAddress(memAddress, terminal.address))
+            R[z] = getByte(1, terminal.value, memAddress);
           else
-            R[z] = getByte(1, MEM32[memAddress >> 2], R[x] + i);
+            R[z] = getByte(1, MEM32[memBlockAddress >> 2], memAddress);
         }
 
         formatR(zName, z);
@@ -752,29 +753,30 @@ int main (int argc, char* argv[]) {
         sprintf(instruction, "l8 %s,[%s%s%i]", zName, xName, (i >= 0) ? "+" : "", i);
         toUpperCase(zName);
         toUpperCase(xName);
-        fprintf(output, "0x%08X:\t%-25s\t%s=MEM[0x%08X]=0x%02X\n", R[29], instruction, zName, R[x] + i, R[z]);
+        fprintf(output, "0x%08X:\t%-25s\t%s=MEM[0x%08X]=0x%02X\n", R[29], instruction, zName, memAddress, R[z] & 0xFF);
         break;
       case 0b011001:
         // l16
         FTypeInstructionZXI(R, &z, &x, &i);
 
-        memAddress = get4ByteAddress((R[x] + i) << 1);
+        memAddress = (R[x] + i) << 1;
+        memBlockAddress = get4ByteAddress(memAddress);
 
         if (z != 0) {
-          if (isDeviceAddress((R[x] + i) << 1, watchdog.address))
-            R[z] = getByte(2, watchdog.value, (R[x] + i) << 1);
-          else if (isDeviceAddress((R[x] + i) << 1, fpuOperandX.address))
-            R[z] = getByte(2, fpuOperandX.value, (R[x] + i) << 1);
-          else if (isDeviceAddress((R[x] + i) << 1, fpuOperandY.address))
-            R[z] = getByte(2, fpuOperandY.value, (R[x] + i) << 1);
-          else if (isDeviceAddress((R[x] + i) << 1, fpuResult.address))
-            R[z] = getByte(2, fpuResult.value, (R[x] + i) << 1);
-          else if (isDeviceAddress((R[x] + i) << 1, fpuControl.address))
-            R[z] = getByte(2, fpuControl.value, (R[x] + i) << 1);
-          else if (isDeviceAddress((R[x] + i) << 1, terminal.address))
-            R[z] = getByte(2, terminal.value, (R[x] + i) << 1);
+          if (isDeviceAddress(memAddress, watchdog.address))
+            R[z] = getByte(2, watchdog.value, memAddress);
+          else if (isDeviceAddress(memAddress, fpuOperandX.address))
+            R[z] = getByte(2, fpuOperandX.value, memAddress);
+          else if (isDeviceAddress(memAddress, fpuOperandY.address))
+            R[z] = getByte(2, fpuOperandY.value, memAddress);
+          else if (isDeviceAddress(memAddress, fpuResult.address))
+            R[z] = getByte(2, fpuResult.value, memAddress);
+          else if (isDeviceAddress(memAddress, fpuControl.address))
+            R[z] = getByte(2, fpuControl.value, memAddress);
+          else if (isDeviceAddress(memAddress, terminal.address))
+            R[z] = getByte(2, terminal.value, memAddress);
           else
-            R[z] = getByte(2, MEM32[memAddress >> 2], (R[x] + i) << 1);
+            R[z] = getByte(2, MEM32[memBlockAddress >> 2], memAddress);
         }
 
         formatR(zName, z);
@@ -783,29 +785,29 @@ int main (int argc, char* argv[]) {
         sprintf(instruction, "l16 %s,[%s%s%i]", zName, xName, (i >= 0) ? "+": "", i);
         toUpperCase(zName);
         toUpperCase(xName);
-        fprintf(output, "0x%08X:\t%-25s\t%s=MEM[0x%08X]=0x%04X\n", R[29], instruction, zName, (R[x] + i) << 1, R[z]);
+        fprintf(output, "0x%08X:\t%-25s\t%s=MEM[0x%08X]=0x%04X\n", R[29], instruction, zName, memAddress, R[z] & 0xFFFF);
         break;
       case 0b011010:
         // l32
         FTypeInstructionZXI(R, &z, &x, &i);
 
-        memAddress = (R[x] + i) << 2;
+        memBlockAddress = (R[x] + i) << 2;
 
         if (z != 0) {
-          if (isDeviceAddress(memAddress, watchdog.address))
+          if (isDeviceAddress(memBlockAddress, watchdog.address))
             R[z] = watchdog.value;
-          else if (isDeviceAddress(memAddress, fpuOperandX.address))
+          else if (isDeviceAddress(memBlockAddress, fpuOperandX.address))
             R[z] = fpuOperandX.value;
-          else if (isDeviceAddress(memAddress, fpuOperandY.address))
+          else if (isDeviceAddress(memBlockAddress, fpuOperandY.address))
             R[z] = fpuOperandY.value;
-          else if (isDeviceAddress(memAddress, fpuResult.address))
+          else if (isDeviceAddress(memBlockAddress, fpuResult.address))
             R[z] = fpuResult.value;
-          else if (isDeviceAddress(memAddress, fpuControl.address))
+          else if (isDeviceAddress(memBlockAddress, fpuControl.address))
             R[z] = fpuControl.value;
-          else if (isDeviceAddress(memAddress, terminal.address))
+          else if (isDeviceAddress(memBlockAddress, terminal.address))
             R[z] = terminal.value;
           else
-            R[z] = MEM32[memAddress >> 2];
+            R[z] = MEM32[memBlockAddress >> 2];
         }
 
         formatR(zName, z);
@@ -814,41 +816,42 @@ int main (int argc, char* argv[]) {
         sprintf(instruction, "l32 %s,[%s%s%i]", zName, xName, (i >= 0) ? "+": "", i);
         toUpperCase(zName);
         toUpperCase(xName);
-        fprintf(output, "0x%08X:\t%-25s\t%s=MEM[0x%08X]=0x%08X\n", R[29], instruction, zName, memAddress, R[z]);
+        fprintf(output, "0x%08X:\t%-25s\t%s=MEM[0x%08X]=0x%08X\n", R[29], instruction, zName, memBlockAddress, R[z]);
         break;
       case 0b011011:
         // s8
         FTypeInstructionZXI(R, &z, &x, &i);
 
-        memAddress = get4ByteAddress(R[x] + i);
+        memAddress = R[x] + i;
+        memBlockAddress = get4ByteAddress(memAddress);
 
-        if (isDeviceAddress(R[x] + i, watchdog.address)) {
+        if (isDeviceAddress(memAddress, watchdog.address)) {
           
-          writeInWatchdog(&watchdog, 1, R[z], R[x] + i);
+          writeInWatchdog(&watchdog, 1, R[z], memAddress);
         
-        } else if (isDeviceAddress(R[x] + i, fpuOperandX.address)) {
+        } else if (isDeviceAddress(memAddress, fpuOperandX.address)) {
           
-          writeInFPU(&fpuOperandX, 1, R[z], R[x] + i);
+          writeInFPU(&fpuOperandX, 1, R[z], memAddress);
         
-        } else if (isDeviceAddress(R[x] + i, fpuOperandY.address)) {
+        } else if (isDeviceAddress(memAddress, fpuOperandY.address)) {
           
-          writeInFPU(&fpuOperandY, 1, R[z], R[x] + i);
+          writeInFPU(&fpuOperandY, 1, R[z], memAddress);
         
-        } else if (isDeviceAddress(R[x] + i, fpuResult.address)) {
+        } else if (isDeviceAddress(memAddress, fpuResult.address)) {
           
-          writeInFPU(&fpuResult, 1, R[z], R[x] + i);
+          writeInFPU(&fpuResult, 1, R[z], memAddress);
         
-        } else if (isDeviceAddress(R[x] + i, fpuControl.address)) {
+        } else if (isDeviceAddress(memAddress, fpuControl.address)) {
           
-          writeInFPUControl(&fpuControl, 1, R[z], R[x] + i);
+          writeInFPUControl(&fpuControl, 1, R[z], memAddress);
           countFpuCycles(&fpuControl, &fpuOperandX, &fpuOperandY);
         
-        } else if (isDeviceAddress(R[x] + i, terminal.address)) {
+        } else if (isDeviceAddress(memAddress, terminal.address)) {
           
-          writeInTerminal(&terminal, 1, R[z], R[x] + i);
+          writeInTerminal(&terminal, 1, R[z], memAddress);
         
         } else
-          writeInMemory(MEM32, 1, R[z], R[x] + i);
+          writeInMemory(MEM32, 1, R[z], memAddress);
 
         formatR(zName, z);
         formatR(xName, x);
@@ -856,41 +859,42 @@ int main (int argc, char* argv[]) {
         sprintf(instruction, "s8 [%s%s%i],%s", xName, (i >= 0) ? "+": "", i, zName);
         toUpperCase(zName);
         toUpperCase(xName);
-        fprintf(output, "0x%08X:\t%-25s\tMEM[0x%08X]=%s=0x%02X\n", R[29], instruction, R[x] + i, zName, R[z]);
+        fprintf(output, "0x%08X:\t%-25s\tMEM[0x%08X]=%s=0x%02X\n", R[29], instruction, memAddress, zName, R[z] & 0xFF);
         break;
       case 0b011100:
         // s16
         FTypeInstructionZXI(R, &z, &x, &i);
 
-        memAddress = get4ByteAddress((R[x] + i) << 1);
+        memAddress = (R[x] + i) << 1;
+        memBlockAddress = get4ByteAddress(memAddress);
 
-        if (isDeviceAddress((R[x] + i) << 1, watchdog.address)) {
+        if (isDeviceAddress(memAddress, watchdog.address)) {
           
-          writeInWatchdog(&watchdog, 2, R[z], (R[x] + i) << 1);
+          writeInWatchdog(&watchdog, 2, R[z], memAddress);
 
-        } else if (isDeviceAddress((R[x] + i) << 1, fpuOperandX.address)) {
+        } else if (isDeviceAddress(memAddress, fpuOperandX.address)) {
           
-          writeInFPU(&fpuOperandX, 2, R[z], (R[x] + i) << 1);
+          writeInFPU(&fpuOperandX, 2, R[z], memAddress);
 
-        } else if (isDeviceAddress((R[x] + i) << 1, fpuOperandY.address)) {
+        } else if (isDeviceAddress(memAddress, fpuOperandY.address)) {
           
-          writeInFPU(&fpuOperandY, 2, R[z], (R[x] + i) << 1);
+          writeInFPU(&fpuOperandY, 2, R[z], memAddress);
 
-        } else if (isDeviceAddress((R[x] + i) << 1, fpuResult.address)) {
+        } else if (isDeviceAddress(memAddress, fpuResult.address)) {
           
-          writeInFPU(&fpuResult, 2, R[z], (R[x] + i) << 1);
+          writeInFPU(&fpuResult, 2, R[z], memAddress);
 
-        } else if (isDeviceAddress((R[x] + i) << 1, fpuControl.address)) {
+        } else if (isDeviceAddress(memAddress, fpuControl.address)) {
           
-          writeInFPUControl(&fpuControl, 2, R[z], (R[x] + i) << 1);
+          writeInFPUControl(&fpuControl, 2, R[z], memAddress);
           countFpuCycles(&fpuControl, &fpuOperandX, &fpuOperandY);
 
-        } else if (isDeviceAddress((R[x] + i) << 1, terminal.address)) {
+        } else if (isDeviceAddress(memAddress, terminal.address)) {
           
-          writeInTerminal(&terminal, 2, R[z], (R[x] + i) << 1);
+          writeInTerminal(&terminal, 2, R[z], memAddress);
 
         } else
-          writeInMemory(MEM32, 2, R[z], (R[x] + i) << 1);
+          writeInMemory(MEM32, 2, R[z], memAddress);
 
         formatR(zName, z);
         formatR(xName, x);
@@ -898,13 +902,13 @@ int main (int argc, char* argv[]) {
         sprintf(instruction, "s16 [%s%s%i],%s", xName, (i >= 0) ? "+": "", i, zName);
         toUpperCase(zName);
         toUpperCase(xName);
-        fprintf(output, "0x%08X:\t%-25s\tMEM[0x%08X]=%s=0x%04X\n", R[29], instruction, (R[x] + i) << 1, zName, R[z]);
+        fprintf(output, "0x%08X:\t%-25s\tMEM[0x%08X]=%s=0x%04X\n", R[29], instruction, memAddress, zName, R[z] & 0xFFFF);
         break;
       case 0b011101:
         // s32
         FTypeInstructionZXI(R, &z, &x, &i);
 
-        memAddress = get4ByteAddress((R[x] + i) << 2);
+        memBlockAddress = (R[x] + i) << 2;
 
         if (isDeviceAddress((R[x] + i) << 2, watchdog.address)) {
 
@@ -932,7 +936,7 @@ int main (int argc, char* argv[]) {
           writeInTerminal(&terminal, 4, R[z], (R[x] + i) << 2);
 
         } else
-          MEM32[memAddress >> 2] = R[z];
+          MEM32[memBlockAddress >> 2] = R[z];
 
 
         formatR(zName, z);
