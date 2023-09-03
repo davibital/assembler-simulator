@@ -37,7 +37,7 @@ typedef struct FPURegisterControl {
   uint32_t address;
   uint32_t value;
 
-  int8_t cycles;
+  uint16_t cycles;
   uint8_t status;
   uint8_t operation;
 
@@ -120,7 +120,6 @@ int main (int argc, char* argv[]) {
 
   uint32_t R[32] = {0};
   
-
   bool hadHardwareInterruption = false;
   bool hadSoftwareInterruption = false;
   uint32_t interruptionAddress = 0;
@@ -1792,14 +1791,14 @@ void fpuOperation(FPURegisterControl* fpuControl, FPURegister* fpuOperandX, FPUR
       break;
     case 0b00101:
       temp = fpuResult->floatValue;
-      writeInFPU(fpuOperandX, 4, fpuOperandX->address, temp);
+      writeInFPU(fpuOperandX, 4, temp, fpuOperandX->address);
       fpuOperandX->value = fpuResult->value;
       fpuControl->interruptionType = 4;
       fpuControl->status = 0;
       break;
     case 0b00110:
       temp = fpuResult->floatValue;
-      writeInFPU(fpuOperandY, 4, fpuOperandY->address, temp);
+      writeInFPU(fpuOperandY, 4, temp, fpuOperandY->address);
       fpuOperandY->value = fpuResult->value;
       fpuControl->interruptionType = 4;
       fpuControl->status = 0;
