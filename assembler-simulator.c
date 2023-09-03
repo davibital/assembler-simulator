@@ -80,7 +80,7 @@ void toUpperCase(char* str);
 
 void interruptionSubRoutine(uint32_t* R, uint32_t* MEM);
 
-void softwareInterruption(uint32_t* R, char interruptionType[]);
+void softwareInterruption(uint32_t* R, char* intType, uint32_t interruptionAddress);
 
 void hardwareInterruption(uint32_t* R, HardwareInterruption hardInt, char* intType, uint32_t interruptionAddress);
 
@@ -172,7 +172,7 @@ int main (int argc, char* argv[]) {
     if (fpuControl.cycles > 0)
       fpuControl.cycles--;
 
-    if ((R[31] & 0x00000002) != 0) {
+    if ((R[31] & 0x00000002) != 0 || strcmp(interruptionType, "int") == 0) {
       if (hadHardwareInterruption) {
 
         if (hardInt.code == 0x01EEE754) {
@@ -201,7 +201,7 @@ int main (int argc, char* argv[]) {
         hardInt.address = 0;
         strcpy(interruptionType, "");
       } else if (hadSoftwareInterruption) {
-        softwareInterruption(R, interruptionType);
+        softwareInterruption(R, interruptionType, interruptionAddress);
         fprintf(output, "[SOFTWARE INTERRUPTION]\n");
         hadSoftwareInterruption = false;
         strcpy(interruptionType, "");
@@ -1512,17 +1512,17 @@ void interruptionSubRoutine(uint32_t* R, uint32_t* MEM) {
   R[30] -= 4;
 }
 
-void softwareInterruption(uint32_t* R, char interruptionType[]) {
+void softwareInterruption(uint32_t* R, char* intType, uint32_t interruptionAddress) {
   // zero division interruption
-  if (strcmp(interruptionType, "zd") == 0) {
+  if (strcmp(intType, "zd") == 0) {
     R[26] = 0;
-    R[27] = R[29];
+    R[27] = interruptionAddress;
     R[29] = 0x00000008 >> 2;
   }
   // invalid instruction
-  else if (strcmp(interruptionType, "iv") == 0) {
+  else if (strcmp(intType, "iv") == 0) {
     R[26] = (R[28] & 0xFC000000) >> 26;
-    R[27] = R[29];
+    R[27] = interruptionAddress;
     R[29] = 0x00000004 >> 2;
   }
 }
