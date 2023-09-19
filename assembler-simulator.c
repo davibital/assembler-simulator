@@ -96,7 +96,7 @@ void writeInWatchdog(Watchdog* watchdog, uint8_t numberOfBytes, uint32_t value, 
 
 void writeInTerminal(Terminal* terminal, uint8_t numberOfBytes, uint32_t value, uint32_t address);
 
-char* doubleTerminalSize(char* terminalOutput, int currentMaxSize);
+void doubleTerminalSize(Terminal *terminal);
 
 void writeInFPU(FPURegister* FPURegister, uint8_t numberOfBytes, uint32_t value, uint32_t address);
 
@@ -119,7 +119,7 @@ int main (int argc, char* argv[]) {
   FILE* output = fopen(argv[2], "w");
 
   uint32_t R[32] = {0};
-  
+
   bool hadHardwareInterruption = false;
   bool hadSoftwareInterruption = false;
   uint32_t interruptionAddress = 0;
@@ -1610,10 +1610,8 @@ void writeInWatchdog(Watchdog* watchdog, uint8_t numberOfBytes, uint32_t value, 
 }
 
 void writeInTerminal(Terminal* terminal, uint8_t numberOfBytes, uint32_t value, uint32_t address) {
-  if (terminal->currentSize == terminal->maxSize) {
-    terminal->output = doubleTerminalSize(terminal->output, terminal->maxSize);
-    terminal->maxSize *= 2;
-  }
+  if (terminal->currentSize == terminal->maxSize - 1)
+    doubleTerminalSize(terminal);
 
   char strTemp[2];
   uint8_t position;
@@ -1647,14 +1645,15 @@ void writeInTerminal(Terminal* terminal, uint8_t numberOfBytes, uint32_t value, 
   terminal->currentSize++;
 }
 
-char* doubleTerminalSize(char* terminalOutput, int currentMaxSize) {
-  char* newTerminal = (char*)(malloc(currentMaxSize * 2 * sizeof(char)));
+void doubleTerminalSize(Terminal* terminal) {
+  char* newTerminal = (char*)(malloc(terminal->maxSize * 2 * sizeof(char)));
 
-  for (int i = 0; i <= currentMaxSize; i++)
-    newTerminal[i] = terminalOutput[i];
+  for (int i = 0; i < terminal->maxSize; i++)
+    newTerminal[i] = terminal->output[i];
 
-  free(terminalOutput);
-  return newTerminal;
+  free(terminal->output);
+  terminal->output = newTerminal;
+  terminal->maxSize *= 2;
 }
 
 void writeInFPU(FPURegister* fpuRegister, uint8_t numberOfBytes, uint32_t value, uint32_t address) {
