@@ -1,4 +1,4 @@
-// gcc -Wall -O3 assembler-simulator.c -o assembler-simulator
+// gcc -Wall -O3 assembler-simulator.cpp -o assembler-simulator
 // ./assembler-simulator input output
 #include <stdint.h>
 #include <stdlib.h>
@@ -72,9 +72,9 @@ void FTypeInstructionPCXI (uint32_t* oldPC, uint32_t* R, uint8_t* x, int32_t* i)
 
 void STypeInstruction (uint32_t* oldPC, uint32_t* R, int32_t* i);
 
-void updateSR (uint32_t* SR, char field[], int condition);
+void updateSR (uint32_t* SR, char const *field, int condition);
 
-void formatR (char RName[5], uint8_t R);
+void formatR (char* RName, uint8_t R);
 
 void toUpperCase(char* str);
 
@@ -149,17 +149,17 @@ int main (int argc, char* argv[]) {
   while (running) {
 
     char instruction[30] = {0};
-
-    uint8_t z = 0, x = 0, y = 0, l = 0, v = 0, w = 0, temp[5];
+    
+    uint8_t z = 0, x = 0, y = 0, l = 0, v = 0, w = 0, temp[5], auxiliarCode;
     char RName[5], zName[5], xName[5], yName[5], lName[5];
-    int32_t xxyl = 0;
+    int32_t xxyl = 0, divs, mods;
     uint32_t oldSP = 0, xyl = 0, memBlockAddress = 0, memAddress = 0, oldPC = R[29] << 2;
     char hexadecimals[55] = {0};
     char registers[20] = {0};
     i = 0;
     
-    uint64_t uresult = 0;
-    int64_t result = 0;
+    uint64_t uresult = 0, cmp, srl, sll, mul;
+    int64_t result = 0, cmpi, sra, sla, muls;
 
     if (watchdog.value >> 31 == 0b1) {
       watchdog.value--;
@@ -298,12 +298,12 @@ int main (int argc, char* argv[]) {
         break;
       case 0b000100:
         UTypeInstructionZXYL(R, &z, &x, &y, &l);
-        uint8_t auxiliarCode = (R[28] & 0x00000700) >> 8;
+        auxiliarCode = (R[28] & 0x00000700) >> 8;
 
         switch (auxiliarCode) {
           case 0b000:
             // mul
-            uint64_t mul = (uint64_t)R[x] * (uint64_t)R[y];
+            mul = (uint64_t)R[x] * (uint64_t)R[y];
             if (z != 0) R[z] = mul;
             if (l != 0) R[l] = mul >> 32;
 
@@ -324,7 +324,7 @@ int main (int argc, char* argv[]) {
             break;
           case 0b001:
             // sll
-            uint64_t sll = (uint64_t)(R[z]) << 32 | (uint64_t)(R[y]);
+            sll = (uint64_t)(R[z]) << 32 | (uint64_t)(R[y]);
             sll = sll << (l + 1);
             if (x != 0) R[x] = sll;
             if (z != 0) R[z] = sll >> 32;
@@ -344,7 +344,7 @@ int main (int argc, char* argv[]) {
             break;
           case 0b010:
             // muls
-            int64_t muls = signalExtension64(R[x]) * signalExtension64(R[y]);
+            muls = signalExtension64(R[x]) * signalExtension64(R[y]);
             if (z != 0) R[z] = muls;
             if (l != 0) R[l] = muls >> 32;
             
@@ -365,7 +365,7 @@ int main (int argc, char* argv[]) {
             break;
           case 0b011:
             // sla
-            int64_t sla = signalExtension64(R[z]) << 32 | (signalExtension64(R[y]) & 0xFFFFFFFF);
+            sla = signalExtension64(R[z]) << 32 | (signalExtension64(R[y]) & 0xFFFFFFFF);
             sla = sla << (l + 1);
             if (x != 0) R[x] = sla;
             if (z != 0) R[z] = sla >> 32;
@@ -420,7 +420,7 @@ int main (int argc, char* argv[]) {
             break;
           case 0b101:
             // srl
-            uint64_t srl = (uint64_t)(R[z]) << 32 | (uint64_t)(R[y]);
+            srl = (uint64_t)(R[z]) << 32 | (uint64_t)(R[y]);
             srl = srl >> (l + 1);
             if (x != 0) R[x] = srl;
             if (z != 0) R[z] = srl >> 32;
@@ -447,8 +447,8 @@ int main (int argc, char* argv[]) {
 
             sprintf(instruction, "divs %s,%s,%s,%s", lName, zName, xName, yName);
 
-            int32_t divs = 0;
-            int32_t mods = 0;
+            divs = 0;
+            mods = 0;
 
             if (R[y] == 0) {
               updateSR(&R[31], "ZD", R[y] == 0);
@@ -479,7 +479,7 @@ int main (int argc, char* argv[]) {
             break;
           case 0b111:
             // sra
-            int64_t sra = signalExtension64(R[z]) << 32 | (signalExtension64(R[y]) & 0xFFFFFFFF);
+            sra = signalExtension64(R[z]) << 32 | (signalExtension64(R[y]) & 0xFFFFFFFF);
             sra = (sra >> (l + 1));
             if (x != 0) R[x] = sra;
             if (z != 0) R[z] = sra >> 32;
@@ -506,7 +506,7 @@ int main (int argc, char* argv[]) {
         // cmp
         UTypeInstructionXY(R, &x, &y);
 
-        int64_t cmp = (int64_t)R[x] - (int64_t)R[y];
+        cmp = (int64_t)R[x] - (int64_t)R[y];
 
         updateSR(&R[31], "ZN", cmp == 0);
         updateSR(&R[31], "SN", ((cmp >> 31) & 0b1) == 0b1);
@@ -711,7 +711,7 @@ int main (int argc, char* argv[]) {
         // cmpi
         FTypeInstructionXI(R, &x, &i);
         
-        int64_t cmpi = signalExtension64(R[x]) - signalExtension64(i);
+        cmpi = signalExtension64(R[x]) - signalExtension64(i);
 
         updateSR(&R[31], "ZN", cmpi == 0);
         updateSR(&R[31], "SN", ((cmpi >> 31) & 0b1) == 0b1);
@@ -1264,7 +1264,6 @@ int main (int argc, char* argv[]) {
         FTypeInstructionZXI(R, &z, &x, &i);
         if (i == 0) {
           // cbr
-
           R[z] = R[z] & ~(0b1 << x);
 
           formatR(zName, z);
@@ -1430,7 +1429,7 @@ void STypeInstruction (uint32_t* oldPC, uint32_t* R, int32_t* i) {
     *i += 0xFC000000;
 }
 
-void updateSR (uint32_t* SR, char field[], int condition) {
+void updateSR (uint32_t* SR, char const *field, int condition) {
 
     if (strcmp(field, "ZN") == 0) {
       if (condition == 1)
@@ -1470,7 +1469,7 @@ void updateSR (uint32_t* SR, char field[], int condition) {
     }
 }
 
-void formatR (char RName[5], uint8_t R) {
+void formatR (char* RName, uint8_t R) {
   switch (R) {
   case 26:
     sprintf(RName, "%s", "cr");
