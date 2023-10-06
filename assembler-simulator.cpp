@@ -2,17 +2,84 @@
 // ./assembler-simulator input output
 #include <stdint.h>
 #include <stdlib.h>
-#include <stdio.h>
+#include <iostream>
 #include <ctype.h>
 #include <string.h>
 #include <stdbool.h>
+#include <string>
 
-typedef struct Watchdog {
-  uint32_t address;
-  uint32_t value;
+using namespace std;
 
-  bool interruptionIsPending;
-} Watchdog;
+class HardwareDevice {
+  protected:
+    uint32_t address;
+    uint32_t value;
+
+  public:
+    virtual void write(uint8_t numberOfBytes, uint32_t value, uint32_t address) = 0;
+      
+    bool isDeviceAddress(uint32_t address) {
+      return (address >= this->address && address < this->address + 4);
+    }
+};
+
+class Watchdog : public HardwareDevice {
+  private:
+    bool interruptionStatus;
+
+  public:
+    Watchdog(uint32_t address) {
+      this->address = address;
+    }
+
+    uint32_t getValue() {
+      return value;
+    }
+
+    void setValue(uint32_t value) {
+      this->value = value;
+    }
+
+    void write(uint8_t numberOfBytes, uint32_t value, uint32_t address) {
+
+      uint8_t position;
+      uint32_t writingValue, bytes, temp;
+
+      if (numberOfBytes == 1) {
+        position = 3 - (address % 4);
+        temp = ~(0x000000FF << (position * 8));
+        // reset byte of watchdog value
+        this->value = this->value & temp;
+        bytes = value & 0x000000FF;
+        bytes = bytes << (position * 8);
+        writingValue = this->value | bytes;
+      } else if (numberOfBytes == 2) {
+        position = (2 - (address % 4)) / 2;
+        temp = ~(0x0000FFFF << (position * 16));
+        // reset byte of watchdog value
+        this->value = this->value & temp;
+        bytes = value & 0x0000FFFF;
+        bytes = bytes << (position * 16);
+        writingValue = this->value | bytes;
+      } else {
+        writingValue = value;
+      }
+
+      this->value = writingValue;
+    }
+
+    void setInterruption() {
+      interruptionStatus = true;
+    }
+
+    void unsetInterruption() {
+      interruptionStatus = false;
+    }
+
+    bool getInterruptionStatus() {
+      return interruptionStatus;
+    }
+};
 
 typedef struct Terminal {
   uint32_t address;
@@ -50,6 +117,68 @@ typedef struct HardwareInterruption {
   uint32_t address;
 } HardwareInterruption;
 
+typedef struct DataCache {
+  /*
+  PALAVRAS -> 32 BITS
+  VALIDADE -> 1 BIT
+  IDENTIFICADOR -> 6 BITS
+  IDADE -> MÁX 255
+
+  LÓGICA DAS PALAVRAS -> PALAVRA % 4 -> RESULTADO SÓ PODE SER 0(P0), 1(P1), 2(P2), 3(P3)
+
+000  [ VALIDADE | IDADE | IDENTIFICADOR | P0 | P1 | P2 | P3]
+000  [ VALIDADE | IDADE | IDENTIFICADOR | P0 | P1 | P2 | P3]
+001  [ VALIDADE | IDADE | IDENTIFICADOR | P0 | P1 | P2 | P3]
+001  [ VALIDADE | IDADE | IDENTIFICADOR | P0 | P1 | P2 | P3]
+010  [ VALIDADE | IDADE | IDENTIFICADOR | P0 | P1 | P2 | P3]
+010  [ VALIDADE | IDADE | IDENTIFICADOR | P0 | P1 | P2 | P3]
+011  [ VALIDADE | IDADE | IDENTIFICADOR | P0 | P1 | P2 | P3]
+011  [ VALIDADE | IDADE | IDENTIFICADOR | P0 | P1 | P2 | P3]
+100  [ VALIDADE | IDADE | IDENTIFICADOR | P0 | P1 | P2 | P3]
+100  [ VALIDADE | IDADE | IDENTIFICADOR | P0 | P1 | P2 | P3]
+101  [ VALIDADE | IDADE | IDENTIFICADOR | P0 | P1 | P2 | P3]
+101  [ VALIDADE | IDADE | IDENTIFICADOR | P0 | P1 | P2 | P3]
+110  [ VALIDADE | IDADE | IDENTIFICADOR | P0 | P1 | P2 | P3]
+110  [ VALIDADE | IDADE | IDENTIFICADOR | P0 | P1 | P2 | P3]
+111  [ VALIDADE | IDADE | IDENTIFICADOR | P0 | P1 | P2 | P3]
+111  [ VALIDADE | IDADE | IDENTIFICADOR | P0 | P1 | P2 | P3]
+
+  SOLICITAÇÃO DE ENDEREÇO -> IDENTIFICADOR | LINHA | PALAVRA | ALINHAMENTO
+  EXEMPLO -> 00000001|000|01|00
+  */
+} DataCache;
+
+typedef struct InstructionCache {
+  /*
+  PALAVRAS -> 32 BITS
+  VALIDADE -> 1 BIT
+  IDENTIFICADOR -> 6 BITS
+  IDADE -> MÁX 255
+
+  LÓGICA DAS PALAVRAS -> PALAVRA % 4 -> RESULTADO SÓ PODE SER 0(P0), 1(P1), 2(P2), 3(P3)
+
+000  [ VALIDADE | IDADE | IDENTIFICADOR | P0 | P1 | P2 | P3]
+000  [ VALIDADE | IDADE | IDENTIFICADOR | P0 | P1 | P2 | P3]
+001  [ VALIDADE | IDADE | IDENTIFICADOR | P0 | P1 | P2 | P3]
+001  [ VALIDADE | IDADE | IDENTIFICADOR | P0 | P1 | P2 | P3]
+010  [ VALIDADE | IDADE | IDENTIFICADOR | P0 | P1 | P2 | P3]
+010  [ VALIDADE | IDADE | IDENTIFICADOR | P0 | P1 | P2 | P3]
+011  [ VALIDADE | IDADE | IDENTIFICADOR | P0 | P1 | P2 | P3]
+011  [ VALIDADE | IDADE | IDENTIFICADOR | P0 | P1 | P2 | P3]
+100  [ VALIDADE | IDADE | IDENTIFICADOR | P0 | P1 | P2 | P3]
+100  [ VALIDADE | IDADE | IDENTIFICADOR | P0 | P1 | P2 | P3]
+101  [ VALIDADE | IDADE | IDENTIFICADOR | P0 | P1 | P2 | P3]
+101  [ VALIDADE | IDADE | IDENTIFICADOR | P0 | P1 | P2 | P3]
+110  [ VALIDADE | IDADE | IDENTIFICADOR | P0 | P1 | P2 | P3]
+110  [ VALIDADE | IDADE | IDENTIFICADOR | P0 | P1 | P2 | P3]
+111  [ VALIDADE | IDADE | IDENTIFICADOR | P0 | P1 | P2 | P3]
+111  [ VALIDADE | IDADE | IDENTIFICADOR | P0 | P1 | P2 | P3]
+
+  SOLICITAÇÃO DE ENDEREÇO -> IDENTIFICADOR | LINHA | PALAVRA | ALINHAMENTO
+  EXEMPLO -> 00000001|000|01|00
+  */
+} InstructionCache;
+
 void getFileInstructions(FILE* input, uint32_t* MEM);
 
 int64_t signalExtension64 (int number);
@@ -84,15 +213,11 @@ void softwareInterruption(uint32_t* R, char* intType, uint32_t interruptionAddre
 
 void hardwareInterruption(uint32_t* R, HardwareInterruption hardInt, char* intType, uint32_t interruptionAddress);
 
-Watchdog createWatchdog(uint32_t address);
-
 Terminal createTerminal(uint32_t address);
 
 FPURegister createFPURegister(uint32_t address);
 
 FPURegisterControl createFPURegisterControl(uint32_t address);
-
-void writeInWatchdog(Watchdog* watchdog, uint8_t numberOfBytes, uint32_t value, uint32_t address);
 
 void writeInTerminal(Terminal* terminal, uint8_t numberOfBytes, uint32_t value, uint32_t address);
 
@@ -131,12 +256,11 @@ int main (int argc, char* argv[]) {
   getFileInstructions(input, MEM32);
   
   Terminal terminal;
-  Watchdog watchdog;
+  Watchdog watchdog(0x80808080);
   FPURegister fpuOperandX, fpuOperandY, fpuResult;
   FPURegisterControl fpuControl;
   HardwareInterruption hardInt = {0};
 
-  watchdog = createWatchdog(0x80808080);
   fpuOperandX = createFPURegister(0x80808880);
   fpuOperandY = createFPURegister(0x80808884);
   fpuResult = createFPURegister(0x80808888);
@@ -161,11 +285,11 @@ int main (int argc, char* argv[]) {
     uint64_t uresult = 0, cmp, srl, sll, mul;
     int64_t result = 0, cmpi, sra, sla, muls;
 
-    if (watchdog.value >> 31 == 0b1) {
-      watchdog.value--;
-      if (watchdog.value << 1 == 0) {
-        watchdog.value = 0;
-        watchdog.interruptionIsPending = true;
+    if (watchdog.getValue() >> 31 == 0b1) {
+      watchdog.setValue(watchdog.getValue() - 1);
+      if (watchdog.getValue() << 1 == 0) {
+        watchdog.setValue(0);
+        watchdog.setInterruption();
       } 
     }
 
@@ -731,8 +855,8 @@ int main (int argc, char* argv[]) {
         memBlockAddress = get4ByteAddress(memAddress);
 
         if (z != 0) {
-          if (isDeviceAddress(memAddress, watchdog.address))
-            R[z] = getByte(1, watchdog.value, memAddress);
+          if (watchdog.isDeviceAddress(memAddress))
+            R[z] = getByte(1, watchdog.getValue(), memAddress);
           else if (isDeviceAddress(memAddress, fpuOperandX.address))
             R[z] = getByte(1, fpuOperandX.value, memAddress);
           else if (isDeviceAddress(memAddress, fpuOperandY.address))
@@ -763,8 +887,8 @@ int main (int argc, char* argv[]) {
         memBlockAddress = get4ByteAddress(memAddress);
 
         if (z != 0) {
-          if (isDeviceAddress(memAddress, watchdog.address))
-            R[z] = getByte(2, watchdog.value, memAddress);
+          if (watchdog.isDeviceAddress(memAddress))
+            R[z] = getByte(2, watchdog.getValue(), memAddress);
           else if (isDeviceAddress(memAddress, fpuOperandX.address))
             R[z] = getByte(2, fpuOperandX.value, memAddress);
           else if (isDeviceAddress(memAddress, fpuOperandY.address))
@@ -794,8 +918,8 @@ int main (int argc, char* argv[]) {
         memBlockAddress = (R[x] + i) << 2;
 
         if (z != 0) {
-          if (isDeviceAddress(memBlockAddress, watchdog.address))
-            R[z] = watchdog.value;
+          if (watchdog.isDeviceAddress(memAddress))
+            R[z] = watchdog.getValue();
           else if (isDeviceAddress(memBlockAddress, fpuOperandX.address))
             R[z] = fpuOperandX.value;
           else if (isDeviceAddress(memBlockAddress, fpuOperandY.address))
@@ -825,10 +949,8 @@ int main (int argc, char* argv[]) {
         memAddress = R[x] + i;
         memBlockAddress = get4ByteAddress(memAddress);
 
-        if (isDeviceAddress(memAddress, watchdog.address)) {
-          
-          writeInWatchdog(&watchdog, 1, R[z], memAddress);
-        
+        if (watchdog.isDeviceAddress(memAddress)) {
+          watchdog.write(1, R[z], memAddress);
         } else if (isDeviceAddress(memAddress, fpuOperandX.address)) {
           
           writeInFPU(&fpuOperandX, 1, R[z], memAddress);
@@ -868,10 +990,8 @@ int main (int argc, char* argv[]) {
         memAddress = (R[x] + i) << 1;
         memBlockAddress = get4ByteAddress(memAddress);
 
-        if (isDeviceAddress(memAddress, watchdog.address)) {
-          
-          writeInWatchdog(&watchdog, 2, R[z], memAddress);
-
+        if (watchdog.isDeviceAddress(memAddress)) {
+          watchdog.write(2, R[z], memAddress);
         } else if (isDeviceAddress(memAddress, fpuOperandX.address)) {
           
           writeInFPU(&fpuOperandX, 2, R[z], memAddress);
@@ -910,10 +1030,8 @@ int main (int argc, char* argv[]) {
 
         memBlockAddress = (R[x] + i) << 2;
 
-        if (isDeviceAddress((R[x] + i) << 2, watchdog.address)) {
-
-          writeInWatchdog(&watchdog, 4, R[z], (R[x] + i) << 2);
-
+        if (watchdog.isDeviceAddress((R[x] + i) << 2)) {
+          watchdog.write(4, R[z], (R[x] + i) << 2);
         } else if (isDeviceAddress((R[x] + i) << 2, fpuOperandX.address)) {
           
           writeInFPU(&fpuOperandX, 4, R[z], (R[x] + i) << 2);
@@ -1295,14 +1413,14 @@ int main (int argc, char* argv[]) {
     }
 
     if ((R[31] & 0x00000002) != 0) {
-      if (watchdog.interruptionIsPending) {
+      if (watchdog.getInterruptionStatus()) {
         interruptionSubRoutine(R, MEM32);
         interruptionAddress = oldPC;
         hadHardwareInterruption = true;
         hardInt.type = 1;
         hardInt.code = 0xE1AC04DA;
         hardInt.address = 0x00000010;
-        watchdog.interruptionIsPending = false;
+        watchdog.unsetInterruption();
       }
     }
 
@@ -1535,7 +1653,7 @@ void hardwareInterruption(uint32_t* R, HardwareInterruption hardInt, char* intTy
   strcpy(intType, strTemp);
 }
 
-Watchdog createWatchdog(uint32_t address) {
+/* Watchdog createWatchdog(uint32_t address) {
   Watchdog watchdog;
 
   watchdog.address = address;
@@ -1543,7 +1661,7 @@ Watchdog createWatchdog(uint32_t address) {
   watchdog.interruptionIsPending = false;
 
   return watchdog;
-}
+} */
 
 Terminal createTerminal(uint32_t address) {
   Terminal terminal;
@@ -1581,7 +1699,7 @@ FPURegisterControl createFPURegisterControl(uint32_t address) {
   return fpu;
 }
 
-void writeInWatchdog(Watchdog* watchdog, uint8_t numberOfBytes, uint32_t value, uint32_t address) {
+/* void writeInWatchdog(Watchdog* watchdog, uint8_t numberOfBytes, uint32_t value, uint32_t address) {
   uint8_t position;
   uint32_t writingValue, bytes, temp;
 
@@ -1607,7 +1725,7 @@ void writeInWatchdog(Watchdog* watchdog, uint8_t numberOfBytes, uint32_t value, 
 
   watchdog->value = writingValue;
 }
-
+ */
 void writeInTerminal(Terminal* terminal, uint8_t numberOfBytes, uint32_t value, uint32_t address) {
   if (terminal->currentSize == terminal->maxSize - 1)
     doubleTerminalSize(terminal);
