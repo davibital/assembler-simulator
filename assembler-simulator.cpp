@@ -16,6 +16,14 @@ class HardwareDevice {
     uint32_t value;
 
   public:
+    uint32_t getValue() {
+      return value;
+    }
+
+    void setValue(uint32_t value) {
+      this->value = value;
+    }
+
     virtual void write(uint8_t numberOfBytes, uint32_t value, uint32_t address) = 0;
       
     bool isDeviceAddress(uint32_t address) {
@@ -32,16 +40,7 @@ class Watchdog : public HardwareDevice {
       this->address = address;
     }
 
-    uint32_t getValue() {
-      return value;
-    }
-
-    void setValue(uint32_t value) {
-      this->value = value;
-    }
-
     void write(uint8_t numberOfBytes, uint32_t value, uint32_t address) {
-
       uint8_t position;
       uint32_t writingValue, bytes, temp;
 
@@ -81,15 +80,77 @@ class Watchdog : public HardwareDevice {
     }
 };
 
-typedef struct Terminal {
-  uint32_t address;
-  uint32_t value;
-  uint8_t input;
+class Terminal : public HardwareDevice {
+  private:
+    uint8_t input;
+    char* output;
+    uint maxSize;
+    uint currentSize;
 
-  char* output;
-  int maxSize;
-  int currentSize;
-} Terminal;
+    void doubleTerminalSize() {
+      char* newTerminal = (char*)(malloc(this->maxSize * 2 * sizeof(char)));
+
+      for (uint i = 0; i < this->maxSize; i++)
+        newTerminal[i] = this->output[i];
+
+      free(this->output);
+      this->output = newTerminal;
+      this->maxSize *= 2;
+    }
+
+  public:
+    Terminal(uint32_t address) {
+      this->address = address;
+      this->output = (char *)(malloc(200 * sizeof(char)));
+      this->currentSize = 0;
+      this->maxSize = 200;
+    }
+
+    void write(uint8_t numberOfBytes, uint32_t value, uint32_t address) {
+      if (this->currentSize == this->maxSize - 1)
+        this->doubleTerminalSize();
+
+      char strTemp[2];
+      uint8_t position;
+      uint32_t writingValue, bytes, temp;
+
+      if (numberOfBytes == 1) {
+        position = 3 - (address % 4);
+        temp = ~(0x000000FF << (position * 8));
+        // reset byte of terminal value
+        this->value = this->value & temp;
+        bytes = value & 0x000000FF;
+        bytes = bytes << (position * 8);
+        writingValue = this->value | bytes;
+      } else if (numberOfBytes == 2) {
+        position = (2 - (address % 4)) / 2;
+        temp = ~(0x0000FFFF << (position * 16));
+        // reset byte of terminal value
+        this->value = this->value & temp;
+        bytes = value & 0x0000FFFF;
+        bytes = bytes << (position * 16);
+        writingValue = this->value | bytes;
+      } else {
+        writingValue = value;
+      }
+
+      this->value = writingValue;
+
+      sprintf(strTemp, "%c", (char) this->value);
+      strcat(this->output, strTemp);
+
+      this->currentSize++;
+    }
+
+    void print(FILE* outputFile) {
+      if (strcmp(this->output, "") != 0) {
+        fprintf(outputFile, "[TERMINAL]\n");
+        fprintf(outputFile, "%s\n", this->output);
+      }
+
+      free(this->output);
+    }
+};
 
 typedef struct FPURegister {
   uint32_t address;
@@ -213,15 +274,9 @@ void softwareInterruption(uint32_t* R, char* intType, uint32_t interruptionAddre
 
 void hardwareInterruption(uint32_t* R, HardwareInterruption hardInt, char* intType, uint32_t interruptionAddress);
 
-Terminal createTerminal(uint32_t address);
-
 FPURegister createFPURegister(uint32_t address);
 
 FPURegisterControl createFPURegisterControl(uint32_t address);
-
-void writeInTerminal(Terminal* terminal, uint8_t numberOfBytes, uint32_t value, uint32_t address);
-
-void doubleTerminalSize(Terminal *terminal);
 
 void writeInFPU(FPURegister* FPURegister, uint8_t numberOfBytes, uint32_t value, uint32_t address);
 
@@ -255,7 +310,7 @@ int main (int argc, char* argv[]) {
  
   getFileInstructions(input, MEM32);
   
-  Terminal terminal;
+  Terminal terminal(0x88888888);
   Watchdog watchdog(0x80808080);
   FPURegister fpuOperandX, fpuOperandY, fpuResult;
   FPURegisterControl fpuControl;
@@ -265,7 +320,6 @@ int main (int argc, char* argv[]) {
   fpuOperandY = createFPURegister(0x80808884);
   fpuResult = createFPURegister(0x80808888);
   fpuControl = createFPURegisterControl(0x8080888C);
-  terminal = createTerminal(0x88888888);
 
   fprintf(output, "[START OF SIMULATION]\n");
   uint8_t running = 1;
@@ -865,8 +919,8 @@ int main (int argc, char* argv[]) {
             R[z] = getByte(1, fpuResult.value, memAddress);
           else if (isDeviceAddress(memAddress, fpuControl.address))
             R[z] = getByte(1, fpuControl.value, memAddress);
-          else if (isDeviceAddress(memAddress, terminal.address))
-            R[z] = getByte(1, terminal.value, memAddress);
+          else if (terminal.isDeviceAddress(memAddress))
+            R[z] = getByte(1, terminal.getValue(), memAddress);
           else
             R[z] = getByte(1, MEM32[memBlockAddress >> 2], memAddress);
         }
@@ -897,8 +951,8 @@ int main (int argc, char* argv[]) {
             R[z] = getByte(2, fpuResult.value, memAddress);
           else if (isDeviceAddress(memAddress, fpuControl.address))
             R[z] = getByte(2, fpuControl.value, memAddress);
-          else if (isDeviceAddress(memAddress, terminal.address))
-            R[z] = getByte(2, terminal.value, memAddress);
+          else if (terminal.isDeviceAddress(memAddress))
+            R[z] = getByte(2, terminal.getValue(), memAddress);
           else
             R[z] = getByte(2, MEM32[memBlockAddress >> 2], memAddress);
         }
@@ -928,8 +982,8 @@ int main (int argc, char* argv[]) {
             R[z] = fpuResult.value;
           else if (isDeviceAddress(memBlockAddress, fpuControl.address))
             R[z] = fpuControl.value;
-          else if (isDeviceAddress(memBlockAddress, terminal.address))
-            R[z] = terminal.value;
+          else if (terminal.isDeviceAddress(memBlockAddress))
+            R[z] = terminal.getValue();
           else
             R[z] = MEM32[memBlockAddress >> 2];
         }
@@ -968,10 +1022,8 @@ int main (int argc, char* argv[]) {
           writeInFPUControl(&fpuControl, 1, R[z], memAddress);
           countFpuCycles(&fpuControl, &fpuOperandX, &fpuOperandY);
         
-        } else if (isDeviceAddress(memAddress, terminal.address)) {
-          
-          writeInTerminal(&terminal, 1, R[z], memAddress);
-        
+        } else if (terminal.isDeviceAddress(memAddress)) {
+          terminal.write(1, R[z], memAddress);
         } else
           writeInMemory(MEM32, 1, R[z], memAddress);
 
@@ -1009,10 +1061,8 @@ int main (int argc, char* argv[]) {
           writeInFPUControl(&fpuControl, 2, R[z], memAddress);
           countFpuCycles(&fpuControl, &fpuOperandX, &fpuOperandY);
 
-        } else if (isDeviceAddress(memAddress, terminal.address)) {
-          
-          writeInTerminal(&terminal, 2, R[z], memAddress);
-
+        } else if (terminal.isDeviceAddress(memAddress)) {
+          terminal.write(2, R[z], memAddress);
         } else
           writeInMemory(MEM32, 2, R[z], memAddress);
 
@@ -1049,10 +1099,8 @@ int main (int argc, char* argv[]) {
           writeInFPUControl(&fpuControl, 4, R[z], (R[x] + i) << 2);
           countFpuCycles(&fpuControl, &fpuOperandX, &fpuOperandY);
 
-        } else if (isDeviceAddress((R[x] + i) << 2, terminal.address)) {
-          
-          writeInTerminal(&terminal, 4, R[z], (R[x] + i) << 2);
-
+        } else if (terminal.isDeviceAddress(memAddress)) {
+          terminal.write(4, R[z], memAddress);
         } else
           MEM32[memBlockAddress >> 2] = R[z];
 
@@ -1435,14 +1483,10 @@ int main (int argc, char* argv[]) {
     R[29] = (R[29] + 4) >> 2;
   }
 
-  if (strcmp(terminal.output, "") != 0) {
-    fprintf(output, "[TERMINAL]\n");
-    fprintf(output, "%s\n", terminal.output);
-  }
+  terminal.print(output);
 
   fprintf(output, "[END OF SIMULATION]\n");
 
-  free(terminal.output);
   fclose(input);
 	fclose(output);
   free(MEM32);
@@ -1663,7 +1707,7 @@ void hardwareInterruption(uint32_t* R, HardwareInterruption hardInt, char* intTy
   return watchdog;
 } */
 
-Terminal createTerminal(uint32_t address) {
+/* Terminal createTerminal(uint32_t address) {
   Terminal terminal;
 
   terminal.address = address;
@@ -1675,7 +1719,7 @@ Terminal createTerminal(uint32_t address) {
   terminal.currentSize = 0;
 
   return terminal;
-}
+} */
 
 FPURegister createFPURegister(uint32_t address) {
   FPURegister fpu;
@@ -1697,80 +1741,6 @@ FPURegisterControl createFPURegisterControl(uint32_t address) {
   fpu.interruptionType = 0;
 
   return fpu;
-}
-
-/* void writeInWatchdog(Watchdog* watchdog, uint8_t numberOfBytes, uint32_t value, uint32_t address) {
-  uint8_t position;
-  uint32_t writingValue, bytes, temp;
-
-  if (numberOfBytes == 1) {
-    position = 3 - (address % 4);
-    temp = ~(0x000000FF << (position * 8));
-    // reset byte of watchdog value
-    watchdog->value = watchdog->value & temp;
-    bytes = value & 0x000000FF;
-    bytes = bytes << (position * 8);
-    writingValue = watchdog->value | bytes;
-  } else if (numberOfBytes == 2) {
-    position = (2 - (address % 4)) / 2;
-    temp = ~(0x0000FFFF << (position * 16));
-    // reset byte of watchdog value
-    watchdog->value = watchdog->value & temp;
-    bytes = value & 0x0000FFFF;
-    bytes = bytes << (position * 16);
-    writingValue = watchdog->value | bytes;
-  } else {
-    writingValue = value;
-  }
-
-  watchdog->value = writingValue;
-}
- */
-void writeInTerminal(Terminal* terminal, uint8_t numberOfBytes, uint32_t value, uint32_t address) {
-  if (terminal->currentSize == terminal->maxSize - 1)
-    doubleTerminalSize(terminal);
-
-  char strTemp[2];
-  uint8_t position;
-  uint32_t writingValue, bytes, temp;
-
-  if (numberOfBytes == 1) {
-    position = 3 - (address % 4);
-    temp = ~(0x000000FF << (position * 8));
-    // reset byte of terminal value
-    terminal->value = terminal->value & temp;
-    bytes = value & 0x000000FF;
-    bytes = bytes << (position * 8);
-    writingValue = terminal->value | bytes;
-  } else if (numberOfBytes == 2) {
-    position = (2 - (address % 4)) / 2;
-    temp = ~(0x0000FFFF << (position * 16));
-    // reset byte of terminal value
-    terminal->value = terminal->value & temp;
-    bytes = value & 0x0000FFFF;
-    bytes = bytes << (position * 16);
-    writingValue = terminal->value | bytes;
-  } else {
-    writingValue = value;
-  }
-
-  terminal->value = writingValue;
-
-  sprintf(strTemp, "%c", (char) terminal->value);
-  strcat(terminal->output, strTemp);
-
-  terminal->currentSize++;
-}
-
-void doubleTerminalSize(Terminal* terminal) {
-  char* newTerminal = (char*)(malloc(terminal->maxSize * 2 * sizeof(char)));
-
-  for (int i = 0; i < terminal->maxSize; i++)
-    newTerminal[i] = terminal->output[i];
-
-  free(terminal->output);
-  terminal->output = newTerminal;
-  terminal->maxSize *= 2;
 }
 
 void writeInFPU(FPURegister* fpuRegister, uint8_t numberOfBytes, uint32_t value, uint32_t address) {
