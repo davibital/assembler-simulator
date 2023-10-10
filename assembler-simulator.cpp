@@ -1,4 +1,4 @@
-// gcc -Wall -O3 assembler-simulator.cpp -o assembler-simulator
+// g++ -Wall -O3 assembler-simulator.cpp -o assembler-simulator
 // ./assembler-simulator input output
 #include <stdint.h>
 #include <stdlib.h>
