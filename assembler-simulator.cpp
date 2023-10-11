@@ -16,6 +16,10 @@ class HardwareDevice {
     uint32_t value;
 
   public:
+    uint32_t getAddress() {
+      return address;
+    }
+
     uint32_t getValue() {
       return value;
     }
@@ -38,6 +42,8 @@ class Watchdog : public HardwareDevice {
   public:
     Watchdog(uint32_t address) {
       this->address = address;
+      value = 0;
+      interruptionStatus = false;
     }
 
     void write(uint8_t numberOfBytes, uint32_t value, uint32_t address) {
@@ -88,27 +94,29 @@ class Terminal : public HardwareDevice {
     uint currentSize;
 
     void doubleTerminalSize() {
-      char* newTerminal = (char*)(malloc(this->maxSize * 2 * sizeof(char)));
+      char* newTerminal = (char*)(malloc(maxSize * 2 * sizeof(char)));
 
-      for (uint i = 0; i < this->maxSize; i++)
-        newTerminal[i] = this->output[i];
+      for (uint i = 0; i < maxSize; i++)
+        newTerminal[i] = output[i];
 
-      free(this->output);
-      this->output = newTerminal;
-      this->maxSize *= 2;
+      free(output);
+      output = newTerminal;
+      maxSize *= 2;
     }
 
   public:
     Terminal(uint32_t address) {
       this->address = address;
-      this->output = (char *)(malloc(200 * sizeof(char)));
-      this->currentSize = 0;
-      this->maxSize = 200;
+      value = 0;
+      input = 0;
+      output = (char *)(malloc(200 * sizeof(char)));
+      currentSize = 0;
+      maxSize = 200;
     }
 
     void write(uint8_t numberOfBytes, uint32_t value, uint32_t address) {
-      if (this->currentSize == this->maxSize - 1)
-        this->doubleTerminalSize();
+      if (currentSize == maxSize - 1)
+        doubleTerminalSize();
 
       char strTemp[2];
       uint8_t position;
@@ -137,40 +145,243 @@ class Terminal : public HardwareDevice {
       this->value = writingValue;
 
       sprintf(strTemp, "%c", (char) this->value);
-      strcat(this->output, strTemp);
+      strcat(output, strTemp);
 
-      this->currentSize++;
+      currentSize++;
     }
 
     void print(FILE* outputFile) {
-      if (strcmp(this->output, "") != 0) {
+      if (strcmp(output, "") != 0) {
         fprintf(outputFile, "[TERMINAL]\n");
-        fprintf(outputFile, "%s\n", this->output);
+        fprintf(outputFile, "%s\n", output);
       }
 
-      free(this->output);
+      free(output);
     }
 };
 
-typedef struct FPURegister {
-  uint32_t address;
-  uint32_t value;
+class FPURegister : public HardwareDevice {
+  private:
+    float floatValue;
+    uint8_t exponent;
+    uint32_t fractional;
+
+  public:
+    FPURegister(uint32_t address) {
+      this->address = address;
+      value = 0;
+      floatValue = 0;
+      exponent = 0;
+      fractional = 0;
+    }
+
+    uint8_t getExponent() {
+      return exponent;
+    }
+
+    float getFloatValue() {
+      return floatValue;
+    }
+
+    void setFloatValue(float value) {
+      floatValue = value;
+      memcpy(&this->value, &floatValue, sizeof (uint32_t));
+    }
+
+    void write(uint8_t numberOfBytes, uint32_t value, uint32_t address) {
+      uint8_t position;
+      uint32_t writingValue, bytes, temp;
+      uint32_t floatHex;
+
+      if (numberOfBytes == 1) {
+        position = 3 - (address % 4);
+        temp = ~(0x000000FF << (position * 8));
+        // reset byte of fpu value
+        this->value = this->value & temp;
+        bytes = value & 0x000000FF;
+        bytes = bytes << (position * 8);
+        writingValue = this->value | bytes;
+      } else if (numberOfBytes == 2) {
+        position = (2 - (address % 4)) / 2;
+        temp = ~(0x0000FFFF << (position * 16));
+        // reset byte of fpu value
+        this->value = this->value & temp;
+        bytes = value & 0x0000FFFF;
+        bytes = bytes << (position * 16);
+        writingValue = this->value | bytes;
+      } else {
+        writingValue = value;
+      }
+
+      this->value = writingValue;
+      floatValue = writingValue;
+
+      memcpy(&floatHex, &floatValue, sizeof(uint32_t));
+
+      exponent = floatHex >> 23;
+      fractional = floatHex & 0x007FFFFF;
+    }
+};
+
+class FPURegisterControl : public HardwareDevice {
+  private:
+    int16_t cycles;
+    uint8_t status;
+    uint8_t operation;
+
+    uint8_t interruptionType;
+
+    FPURegister *fpuOperandX, *fpuOperandY, *fpuResult;
+
+  public:
+    FPURegisterControl(uint32_t address, FPURegister* fpuOperandX, FPURegister* fpuOperandY, FPURegister* fpuResult) : fpuOperandX(fpuOperandX), fpuOperandY(fpuOperandY), fpuResult(fpuResult) {
+      this->address = address;
+      value = 0;
+      cycles = -1;
+      status = 0;
+      operation = value & 0x0000001F;
+      interruptionType = 0;
+    }
+
+    int16_t getCycles() {
+      return cycles;
+    }
+
+    uint8_t getInterruptionType() {
+      return interruptionType;
+    }
+
+    void setInterruptionType(uint8_t interruptionType) {
+      this->interruptionType = interruptionType;
+    }
+
+    void write(uint8_t numberOfBytes, uint32_t value, uint32_t address) {
+      uint8_t position;
+      uint32_t writingValue, bytes, temp;
+
+      if (numberOfBytes == 1) {
+        position = 3 - (address % 4);
+        temp = ~(0x000000FF << (position * 8));
+        // reset byte of fpu value
+        this->value = this->value & temp;
+        bytes = value & 0x000000FF;
+        bytes = bytes << (position * 8);
+        writingValue = this->value | bytes;
+      } else if (numberOfBytes == 2) {
+        position = (2 - (address % 4)) / 2;
+        temp = ~(0x0000FFFF << (position * 16));
+        // reset byte of fpu value
+        this->value = this->value & temp;
+        bytes = value & 0x0000FFFF;
+        bytes = bytes << (position * 16);
+        writingValue = this->value | bytes;
+      } else {
+        writingValue = value;
+      }
+
+      uint32_t temp2 = 0xFFFFFFDF | (status << 5);
+
+      this->value = writingValue & temp2;
+      operation = writingValue & 0x0000001F;
+
+      countCycles();
+    }
+
+    void countCycles() {
+      if (operation >= 0b00001 && operation <= 0b00100)
+        cycles = abs((fpuOperandX->getExponent() - fpuOperandY->getExponent())) + 1;
+      else
+        cycles = 1;
+    }
+
+    void decreaseCycles() {
+      cycles--;
+    }
+
+    void startOperation() {
+      if (operation == 0) return;
+
+      uint32_t temp;
+      float x = fpuOperandX->getFloatValue();
+      float y = fpuOperandY->getFloatValue();
+
+      switch (operation) {
+        case 0b00001:
+          fpuResult->setFloatValue(x + y);
+          interruptionType = 3;
+          status = 0;
+          break;
+        case 0b00010:
+          fpuResult->setFloatValue(x - y);
+          interruptionType = 3;
+          status = 0;
+          break;
+        case 0b00011:
+          fpuResult->setFloatValue(x * y);
+          interruptionType = 3;
+          status = 0;
+          break;
+        case 0b00100:
+          if (y != 0) 
+          {
+            fpuResult->setFloatValue(x / y);
+            interruptionType = 3;
+            status = 0;
+          } 
+          else 
+          {
+            interruptionType = 2;
+            status = 1;
+          }
+          break;
+        case 0b00101:
+          temp = fpuResult->getFloatValue();
+          fpuOperandX->write(4, temp, fpuOperandX->getAddress());
+          fpuOperandX->setValue(fpuResult->getValue());
+          interruptionType = 4;
+          status = 0;
+          break;
+        case 0b00110:
+          temp = fpuResult->getFloatValue();
+          fpuOperandY->write(4, temp, fpuOperandY->getAddress());
+          fpuOperandY->setValue(fpuResult->getValue());
+          interruptionType = 4;
+          status = 0;
+          break;
+        case 0b00111:
+          // teto
+          temp = fpuResult->getFloatValue() + 1;
+          fpuResult->setValue(temp);
+          interruptionType = 4;
+          status = 0;
+          break;
+        case 0b01000:
+          // piso
+          temp = fpuResult->getFloatValue();
+          fpuResult->setValue(temp);
+          interruptionType = 4;
+          status = 0;
+          break;
+        case 0b01001:
+          // arredondamento
+          temp = fpuResult->getFloatValue();
+          if ((fpuResult->getFloatValue() - temp) >= 5)
+            temp++;
+          fpuResult->setValue(temp);
+          interruptionType = 4;
+          status = 0;
+          break;
+        default:
+          interruptionType = 2;
+          status = 1;
+          break;
+      }
+
+      operation = 0;
+      value = status << 5;
+    }
   
-  float floatValue;
-  uint8_t exponent;
-  uint32_t fractional;
-} FPURegister;
-
-typedef struct FPURegisterControl {
-  uint32_t address;
-  uint32_t value;
-
-  uint16_t cycles;
-  uint8_t status;
-  uint8_t operation;
-
-  uint8_t interruptionType;
-} FPURegisterControl;
+};
 
 typedef struct HardwareInterruption {
   uint8_t type;
@@ -274,21 +485,7 @@ void softwareInterruption(uint32_t* R, char* intType, uint32_t interruptionAddre
 
 void hardwareInterruption(uint32_t* R, HardwareInterruption hardInt, char* intType, uint32_t interruptionAddress);
 
-FPURegister createFPURegister(uint32_t address);
-
-FPURegisterControl createFPURegisterControl(uint32_t address);
-
-void writeInFPU(FPURegister* FPURegister, uint8_t numberOfBytes, uint32_t value, uint32_t address);
-
-void writeInFPUControl(FPURegisterControl* fpuControl, uint8_t numberOfBytes, uint32_t value, uint32_t address);
-
 void writeInMemory(uint32_t* MEM, uint8_t numberOfBytes, uint32_t value, uint32_t address);
-
-void countFpuCycles(FPURegisterControl* fpuControl, FPURegister* fpuOperandX, FPURegister* fpuOperandY);
-
-void fpuOperation(FPURegisterControl* fpuControl, FPURegister* fpuOperandX, FPURegister* fpuOperandY, FPURegister* fpuResult);
-
-bool isDeviceAddress(uint32_t address, uint32_t deviceAddress);
 
 uint32_t get4ByteAddress(uint32_t address);
 
@@ -309,17 +506,11 @@ int main (int argc, char* argv[]) {
   uint32_t* MEM32 = (uint32_t*)(calloc(8, 1024));
  
   getFileInstructions(input, MEM32);
-  
   Terminal terminal(0x88888888);
   Watchdog watchdog(0x80808080);
-  FPURegister fpuOperandX, fpuOperandY, fpuResult;
-  FPURegisterControl fpuControl;
+  FPURegister fpuOperandX(0x80808880), fpuOperandY(0x80808884), fpuResult(0x80808888);
+  FPURegisterControl fpuControl(0x8080888C, &fpuOperandX, &fpuOperandY, &fpuResult);
   HardwareInterruption hardInt = {0};
-
-  fpuOperandX = createFPURegister(0x80808880);
-  fpuOperandY = createFPURegister(0x80808884);
-  fpuResult = createFPURegister(0x80808888);
-  fpuControl = createFPURegisterControl(0x8080888C);
 
   fprintf(output, "[START OF SIMULATION]\n");
   uint8_t running = 1;
@@ -347,16 +538,16 @@ int main (int argc, char* argv[]) {
       } 
     }
 
-    if (fpuControl.cycles > 0)
-      fpuControl.cycles--;
+    if (fpuControl.getCycles() > 0)
+      fpuControl.decreaseCycles();
 
     if ((R[31] & 0x00000002) != 0 || strcmp(interruptionType, "int") == 0) {
       if (hadHardwareInterruption) {
 
         if (hardInt.code == 0x01EEE754) {
-          fpuOperation(&fpuControl, &fpuOperandX, &fpuOperandY, &fpuResult);
+          fpuControl.startOperation();
 
-          hardInt.type = fpuControl.interruptionType;
+          hardInt.type = fpuControl.getInterruptionType();
           switch(hardInt.type) {
             case 2:
               hardInt.address = 0x00000014;
@@ -911,14 +1102,14 @@ int main (int argc, char* argv[]) {
         if (z != 0) {
           if (watchdog.isDeviceAddress(memAddress))
             R[z] = getByte(1, watchdog.getValue(), memAddress);
-          else if (isDeviceAddress(memAddress, fpuOperandX.address))
-            R[z] = getByte(1, fpuOperandX.value, memAddress);
-          else if (isDeviceAddress(memAddress, fpuOperandY.address))
-            R[z] = getByte(1, fpuOperandY.value, memAddress);
-          else if (isDeviceAddress(memAddress, fpuResult.address))
-            R[z] = getByte(1, fpuResult.value, memAddress);
-          else if (isDeviceAddress(memAddress, fpuControl.address))
-            R[z] = getByte(1, fpuControl.value, memAddress);
+          else if (fpuOperandX.isDeviceAddress(memAddress))
+            R[z] = getByte(1, fpuOperandX.getValue(), memAddress);
+          else if (fpuOperandY.isDeviceAddress(memAddress))
+            R[z] = getByte(1, fpuOperandY.getValue(), memAddress);
+          else if (fpuResult.isDeviceAddress(memAddress))
+            R[z] = getByte(1, fpuResult.getValue(), memAddress);
+          else if (fpuControl.isDeviceAddress(memAddress))
+            R[z] = getByte(1, fpuControl.getValue(), memAddress);
           else if (terminal.isDeviceAddress(memAddress))
             R[z] = getByte(1, terminal.getValue(), memAddress);
           else
@@ -943,14 +1134,14 @@ int main (int argc, char* argv[]) {
         if (z != 0) {
           if (watchdog.isDeviceAddress(memAddress))
             R[z] = getByte(2, watchdog.getValue(), memAddress);
-          else if (isDeviceAddress(memAddress, fpuOperandX.address))
-            R[z] = getByte(2, fpuOperandX.value, memAddress);
-          else if (isDeviceAddress(memAddress, fpuOperandY.address))
-            R[z] = getByte(2, fpuOperandY.value, memAddress);
-          else if (isDeviceAddress(memAddress, fpuResult.address))
-            R[z] = getByte(2, fpuResult.value, memAddress);
-          else if (isDeviceAddress(memAddress, fpuControl.address))
-            R[z] = getByte(2, fpuControl.value, memAddress);
+          else if (fpuOperandX.isDeviceAddress(memAddress))
+            R[z] = getByte(2, fpuOperandX.getValue(), memAddress);
+          else if (fpuOperandY.isDeviceAddress(memAddress))
+            R[z] = getByte(2, fpuOperandY.getValue(), memAddress);
+          else if (fpuResult.isDeviceAddress(memAddress))
+            R[z] = getByte(2, fpuResult.getValue(), memAddress);
+          else if (fpuControl.isDeviceAddress(memAddress))
+            R[z] = getByte(2, fpuControl.getValue(), memAddress);
           else if (terminal.isDeviceAddress(memAddress))
             R[z] = getByte(2, terminal.getValue(), memAddress);
           else
@@ -972,16 +1163,16 @@ int main (int argc, char* argv[]) {
         memBlockAddress = (R[x] + i) << 2;
 
         if (z != 0) {
-          if (watchdog.isDeviceAddress(memAddress))
+          if (watchdog.isDeviceAddress(memBlockAddress))
             R[z] = watchdog.getValue();
-          else if (isDeviceAddress(memBlockAddress, fpuOperandX.address))
-            R[z] = fpuOperandX.value;
-          else if (isDeviceAddress(memBlockAddress, fpuOperandY.address))
-            R[z] = fpuOperandY.value;
-          else if (isDeviceAddress(memBlockAddress, fpuResult.address))
-            R[z] = fpuResult.value;
-          else if (isDeviceAddress(memBlockAddress, fpuControl.address))
-            R[z] = fpuControl.value;
+          else if (fpuOperandX.isDeviceAddress(memBlockAddress))
+            R[z] = fpuOperandX.getValue();
+          else if (fpuOperandY.isDeviceAddress(memBlockAddress))
+            R[z] = fpuOperandY.getValue();
+          else if (fpuResult.isDeviceAddress(memBlockAddress))
+            R[z] = fpuResult.getValue();
+          else if (fpuControl.isDeviceAddress(memBlockAddress))
+            R[z] = fpuControl.getValue();
           else if (terminal.isDeviceAddress(memBlockAddress))
             R[z] = terminal.getValue();
           else
@@ -1003,28 +1194,19 @@ int main (int argc, char* argv[]) {
         memAddress = R[x] + i;
         memBlockAddress = get4ByteAddress(memAddress);
 
-        if (watchdog.isDeviceAddress(memAddress)) {
+        if (watchdog.isDeviceAddress(memAddress)) 
           watchdog.write(1, R[z], memAddress);
-        } else if (isDeviceAddress(memAddress, fpuOperandX.address)) {
-          
-          writeInFPU(&fpuOperandX, 1, R[z], memAddress);
-        
-        } else if (isDeviceAddress(memAddress, fpuOperandY.address)) {
-          
-          writeInFPU(&fpuOperandY, 1, R[z], memAddress);
-        
-        } else if (isDeviceAddress(memAddress, fpuResult.address)) {
-          
-          writeInFPU(&fpuResult, 1, R[z], memAddress);
-        
-        } else if (isDeviceAddress(memAddress, fpuControl.address)) {
-          
-          writeInFPUControl(&fpuControl, 1, R[z], memAddress);
-          countFpuCycles(&fpuControl, &fpuOperandX, &fpuOperandY);
-        
-        } else if (terminal.isDeviceAddress(memAddress)) {
+        else if (fpuOperandX.isDeviceAddress(memAddress)) 
+          fpuOperandX.write(1, R[z], memAddress);
+        else if (fpuOperandY.isDeviceAddress(memAddress)) 
+          fpuOperandY.write(1, R[z], memAddress);
+        else if (fpuResult.isDeviceAddress(memAddress)) 
+          fpuResult.write(1, R[z], memAddress);
+        else if (fpuControl.isDeviceAddress(memAddress))
+          fpuControl.write(1, R[z], memAddress);
+        else if (terminal.isDeviceAddress(memAddress)) 
           terminal.write(1, R[z], memAddress);
-        } else
+        else
           writeInMemory(MEM32, 1, R[z], memAddress);
 
         formatR(zName, z);
@@ -1042,28 +1224,19 @@ int main (int argc, char* argv[]) {
         memAddress = (R[x] + i) << 1;
         memBlockAddress = get4ByteAddress(memAddress);
 
-        if (watchdog.isDeviceAddress(memAddress)) {
+        if (watchdog.isDeviceAddress(memAddress))
           watchdog.write(2, R[z], memAddress);
-        } else if (isDeviceAddress(memAddress, fpuOperandX.address)) {
-          
-          writeInFPU(&fpuOperandX, 2, R[z], memAddress);
-
-        } else if (isDeviceAddress(memAddress, fpuOperandY.address)) {
-          
-          writeInFPU(&fpuOperandY, 2, R[z], memAddress);
-
-        } else if (isDeviceAddress(memAddress, fpuResult.address)) {
-          
-          writeInFPU(&fpuResult, 2, R[z], memAddress);
-
-        } else if (isDeviceAddress(memAddress, fpuControl.address)) {
-          
-          writeInFPUControl(&fpuControl, 2, R[z], memAddress);
-          countFpuCycles(&fpuControl, &fpuOperandX, &fpuOperandY);
-
-        } else if (terminal.isDeviceAddress(memAddress)) {
+        else if (fpuOperandX.isDeviceAddress(memAddress)) 
+          fpuOperandX.write(2, R[z], memAddress);
+        else if (fpuOperandY.isDeviceAddress(memAddress)) 
+          fpuOperandY.write(2, R[z], memAddress);
+        else if (fpuResult.isDeviceAddress(memAddress)) 
+          fpuResult.write(2, R[z], memAddress);
+        else if (fpuControl.isDeviceAddress(memAddress)) 
+          fpuControl.write(2, R[z], memAddress);
+        else if (terminal.isDeviceAddress(memAddress))
           terminal.write(2, R[z], memAddress);
-        } else
+        else
           writeInMemory(MEM32, 2, R[z], memAddress);
 
         formatR(zName, z);
@@ -1080,30 +1253,20 @@ int main (int argc, char* argv[]) {
 
         memBlockAddress = (R[x] + i) << 2;
 
-        if (watchdog.isDeviceAddress((R[x] + i) << 2)) {
+        if (watchdog.isDeviceAddress((R[x] + i) << 2))
           watchdog.write(4, R[z], (R[x] + i) << 2);
-        } else if (isDeviceAddress((R[x] + i) << 2, fpuOperandX.address)) {
-          
-          writeInFPU(&fpuOperandX, 4, R[z], (R[x] + i) << 2);
-
-        } else if (isDeviceAddress((R[x] + i) << 2, fpuOperandY.address)) {
-          
-          writeInFPU(&fpuOperandY, 4, R[z], (R[x] + i) << 2);
-
-        } else if (isDeviceAddress((R[x] + i) << 2, fpuResult.address)) {
-          
-          writeInFPU(&fpuResult, 4, R[z], (R[x] + i) << 2);
-
-        } else if (isDeviceAddress((R[x] + i) << 2, fpuControl.address)) {
-          
-          writeInFPUControl(&fpuControl, 4, R[z], (R[x] + i) << 2);
-          countFpuCycles(&fpuControl, &fpuOperandX, &fpuOperandY);
-
-        } else if (terminal.isDeviceAddress(memAddress)) {
-          terminal.write(4, R[z], memAddress);
-        } else
+        else if (fpuOperandX.isDeviceAddress((R[x] + i) << 2))
+          fpuOperandX.write(4, R[z], (R[x] + i) << 2);
+        else if (fpuOperandY.isDeviceAddress((R[x] + i) << 2))
+          fpuOperandY.write(4, R[z], (R[x] + i) << 2);
+        else if (fpuResult.isDeviceAddress((R[x] + i) << 2))
+          fpuResult.write(4, R[z], (R[x] + i) << 2);
+        else if (fpuControl.isDeviceAddress((R[x] + i) << 2))
+          fpuControl.write(4, R[z], (R[x] + i) << 2);
+        else if (terminal.isDeviceAddress((R[x] + i) << 2))
+          terminal.write(4, R[z], (R[x] + i) << 2);
+        else
           MEM32[memBlockAddress >> 2] = R[z];
-
 
         formatR(zName, z);
         formatR(xName, x);
@@ -1472,12 +1635,12 @@ int main (int argc, char* argv[]) {
       }
     }
 
-    if (fpuControl.cycles == 0) {
+    if (fpuControl.getCycles() == 0) {
       interruptionSubRoutine(R, MEM32);
       interruptionAddress = oldPC;
       hadHardwareInterruption = true;
       hardInt.code = 0x01EEE754;
-      fpuControl.cycles = -1;
+      fpuControl.decreaseCycles();
     }
 
     R[29] = (R[29] + 4) >> 2;
@@ -1697,116 +1860,6 @@ void hardwareInterruption(uint32_t* R, HardwareInterruption hardInt, char* intTy
   strcpy(intType, strTemp);
 }
 
-/* Watchdog createWatchdog(uint32_t address) {
-  Watchdog watchdog;
-
-  watchdog.address = address;
-  watchdog.value = 0;
-  watchdog.interruptionIsPending = false;
-
-  return watchdog;
-} */
-
-/* Terminal createTerminal(uint32_t address) {
-  Terminal terminal;
-
-  terminal.address = address;
-  terminal.value = 0;
-  terminal.input = 0;
-
-  terminal.output = (char*)(malloc(200 * sizeof(char)));
-  terminal.maxSize = 200;
-  terminal.currentSize = 0;
-
-  return terminal;
-} */
-
-FPURegister createFPURegister(uint32_t address) {
-  FPURegister fpu;
-
-  fpu.address = address;
-  fpu.value = 0;
-
-  return fpu;
-}
-
-FPURegisterControl createFPURegisterControl(uint32_t address) {
-  FPURegisterControl fpu;
-
-  fpu.address = address;
-  fpu.value = 0;
-  fpu.cycles = -1;
-  fpu.status = 0;
-  fpu.operation = fpu.value & 0x0000001F;
-  fpu.interruptionType = 0;
-
-  return fpu;
-}
-
-void writeInFPU(FPURegister* fpuRegister, uint8_t numberOfBytes, uint32_t value, uint32_t address) {
-  uint8_t position;
-  uint32_t writingValue, bytes, temp;
-  uint32_t floatHex;
-
-  if (numberOfBytes == 1) {
-    position = 3 - (address % 4);
-    temp = ~(0x000000FF << (position * 8));
-    // reset byte of fpu value
-    fpuRegister->value = fpuRegister->value & temp;
-    bytes = value & 0x000000FF;
-    bytes = bytes << (position * 8);
-    writingValue = fpuRegister->value | bytes;
-  } else if (numberOfBytes == 2) {
-    position = (2 - (address % 4)) / 2;
-    temp = ~(0x0000FFFF << (position * 16));
-    // reset byte of fpu value
-    fpuRegister->value = fpuRegister->value & temp;
-    bytes = value & 0x0000FFFF;
-    bytes = bytes << (position * 16);
-    writingValue = fpuRegister->value | bytes;
-  } else {
-    writingValue = value;
-  }
-
-  fpuRegister->value = writingValue;
-  fpuRegister->floatValue = writingValue;
-
-  memcpy(&floatHex, &fpuRegister->floatValue, sizeof(uint32_t));
-
-  fpuRegister->exponent = floatHex >> 23;
-  fpuRegister->fractional = floatHex & 0x007FFFFF;
-}
-
-void writeInFPUControl(FPURegisterControl* fpuControl, uint8_t numberOfBytes, uint32_t value, uint32_t address) {
-  uint8_t position;
-  uint32_t writingValue, bytes, temp;
-
-  if (numberOfBytes == 1) {
-    position = 3 - (address % 4);
-    temp = ~(0x000000FF << (position * 8));
-    // reset byte of fpu value
-    fpuControl->value = fpuControl->value & temp;
-    bytes = value & 0x000000FF;
-    bytes = bytes << (position * 8);
-    writingValue = fpuControl->value | bytes;
-  } else if (numberOfBytes == 2) {
-    position = (2 - (address % 4)) / 2;
-    temp = ~(0x0000FFFF << (position * 16));
-    // reset byte of fpu value
-    fpuControl->value = fpuControl->value & temp;
-    bytes = value & 0x0000FFFF;
-    bytes = bytes << (position * 16);
-    writingValue = fpuControl->value | bytes;
-  } else {
-    writingValue = value;
-  }
-
-  uint32_t temp2 = 0xFFFFFFDF | (fpuControl->status << 5);
-
-  fpuControl->value = writingValue & temp2;
-  fpuControl->operation = writingValue & 0x0000001F;
-}
-
 void writeInMemory(uint32_t* MEM, uint8_t numberOfBytes, uint32_t value, uint32_t address) {
   uint32_t memAddress = address - (address % 4);
   uint8_t position;
@@ -1833,101 +1886,6 @@ void writeInMemory(uint32_t* MEM, uint8_t numberOfBytes, uint32_t value, uint32_
   }
 
   MEM[memAddress >> 2] = writingValue;
-}
-
-void countFpuCycles(FPURegisterControl* fpuControl, FPURegister* fpuOperandX, FPURegister* fpuOperandY) {
-  if (fpuControl->operation >= 0b00001 && fpuControl->operation <= 0b00100)
-    fpuControl->cycles = abs((fpuOperandX->exponent - fpuOperandY->exponent)) + 1;
-  else
-    fpuControl->cycles = 1;
-}
-
-void fpuOperation(FPURegisterControl* fpuControl, FPURegister* fpuOperandX, FPURegister* fpuOperandY, FPURegister* fpuResult) {
-  if (fpuControl->operation == 0) return;
-
-  uint32_t temp;
-  float x = fpuOperandX->floatValue;
-  float y = fpuOperandY->floatValue;
-
-  switch (fpuControl->operation) {
-    case 0b00001:
-      fpuResult->floatValue = x + y;
-      memcpy(&fpuResult->value, &fpuResult->floatValue, sizeof(uint32_t));
-      fpuControl->interruptionType = 3;
-      fpuControl->status = 0;
-      break;
-    case 0b00010:
-      fpuResult->floatValue = x - y;
-      memcpy(&fpuResult->value, &fpuResult->floatValue, sizeof(uint32_t));
-      fpuControl->interruptionType = 3;
-      fpuControl->status = 0;
-      break;
-    case 0b00011:
-      fpuResult->floatValue = x * y;
-      memcpy(&fpuResult->value, &fpuResult->floatValue, sizeof(uint32_t));
-      fpuControl->interruptionType = 3;
-      fpuControl->status = 0;
-      break;
-    case 0b00100:
-      if (y != 0) {
-        fpuResult->floatValue = x / y;
-        memcpy(&fpuResult->value, &fpuResult->floatValue, sizeof(uint32_t));
-        fpuControl->interruptionType = 3;
-        fpuControl->status = 0;
-      } else {
-        fpuControl->status = 1;
-        fpuControl->interruptionType = 2;
-      }
-      break;
-    case 0b00101:
-      temp = fpuResult->floatValue;
-      writeInFPU(fpuOperandX, 4, temp, fpuOperandX->address);
-      fpuOperandX->value = fpuResult->value;
-      fpuControl->interruptionType = 4;
-      fpuControl->status = 0;
-      break;
-    case 0b00110:
-      temp = fpuResult->floatValue;
-      writeInFPU(fpuOperandY, 4, temp, fpuOperandY->address);
-      fpuOperandY->value = fpuResult->value;
-      fpuControl->interruptionType = 4;
-      fpuControl->status = 0;
-      break;
-    case 0b00111:
-      // teto
-      temp = fpuResult->floatValue + 1;
-      fpuResult->value = temp;
-      fpuControl->interruptionType = 4;
-      fpuControl->status = 0;
-      break;
-    case 0b01000:
-      // piso
-      temp = fpuResult->floatValue;
-      fpuResult->value = temp;
-      fpuControl->interruptionType = 4;
-      fpuControl->status = 0;
-      break;
-    case 0b01001:
-      // arredondamento
-      temp = fpuResult->floatValue;
-      if ((fpuResult->floatValue - temp) >= 5)
-        temp++;
-      fpuResult->value = temp;
-      fpuControl->interruptionType = 4;
-      fpuControl->status = 0;
-      break;
-    default:
-      fpuControl->status = 1;
-      fpuControl->interruptionType = 2;
-      break;
-  }
-
-  fpuControl->operation = 0;
-  fpuControl->value = fpuControl->status << 5;
-}
-
-bool isDeviceAddress(uint32_t address, uint32_t deviceAddress) {
-  return (address >= deviceAddress && address < deviceAddress + 4);
 }
 
 uint32_t get4ByteAddress(uint32_t address) {
