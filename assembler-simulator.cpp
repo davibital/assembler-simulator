@@ -5,12 +5,13 @@
 #include <iostream>
 #include <ctype.h>
 #include <string.h>
-#include <stdbool.h>
 #include <string>
+#include <array>
 
 using namespace std;
 
-class HardwareDevice {
+class HardwareDevice
+{
   protected:
     uint32_t address;
     uint32_t value;
@@ -35,7 +36,8 @@ class HardwareDevice {
     }
 };
 
-class Watchdog : public HardwareDevice {
+class Watchdog : public HardwareDevice
+{
   private:
     bool interruptionStatus;
 
@@ -86,7 +88,8 @@ class Watchdog : public HardwareDevice {
     }
 };
 
-class Terminal : public HardwareDevice {
+class Terminal : public HardwareDevice
+{
   private:
     uint8_t input;
     char* output;
@@ -160,7 +163,8 @@ class Terminal : public HardwareDevice {
     }
 };
 
-class FPURegister : public HardwareDevice {
+class FPURegister : public HardwareDevice
+{
   private:
     float floatValue;
     uint8_t exponent;
@@ -223,7 +227,8 @@ class FPURegister : public HardwareDevice {
     }
 };
 
-class FPURegisterControl : public HardwareDevice {
+class FPURegisterControl : public HardwareDevice
+{
   private:
     int16_t cycles;
     uint8_t status;
@@ -383,73 +388,188 @@ class FPURegisterControl : public HardwareDevice {
   
 };
 
-typedef struct HardwareInterruption {
+typedef struct HardwareInterruption
+{
   uint8_t type;
   uint32_t code;
   uint32_t address;
 } HardwareInterruption;
 
-typedef struct DataCache {
-  /*
-  PALAVRAS -> 32 BITS
-  VALIDADE -> 1 BIT
-  IDENTIFICADOR -> 6 BITS
-  IDADE -> MÁX 255
+class Cache
+{
+  private:
+    class Line
+    {
+      private:
+        uint8_t index, age, identifier;
+        bool available;
+        array<uint32_t, 4> words;
 
-  LÓGICA DAS PALAVRAS -> PALAVRA % 4 -> RESULTADO SÓ PODE SER 0(P0), 1(P1), 2(P2), 3(P3)
+      public:
+        Line()
+        {
+          available = false;
+        }
 
-000  [ VALIDADE | IDADE | IDENTIFICADOR | P0 | P1 | P2 | P3]
-000  [ VALIDADE | IDADE | IDENTIFICADOR | P0 | P1 | P2 | P3]
-001  [ VALIDADE | IDADE | IDENTIFICADOR | P0 | P1 | P2 | P3]
-001  [ VALIDADE | IDADE | IDENTIFICADOR | P0 | P1 | P2 | P3]
-010  [ VALIDADE | IDADE | IDENTIFICADOR | P0 | P1 | P2 | P3]
-010  [ VALIDADE | IDADE | IDENTIFICADOR | P0 | P1 | P2 | P3]
-011  [ VALIDADE | IDADE | IDENTIFICADOR | P0 | P1 | P2 | P3]
-011  [ VALIDADE | IDADE | IDENTIFICADOR | P0 | P1 | P2 | P3]
-100  [ VALIDADE | IDADE | IDENTIFICADOR | P0 | P1 | P2 | P3]
-100  [ VALIDADE | IDADE | IDENTIFICADOR | P0 | P1 | P2 | P3]
-101  [ VALIDADE | IDADE | IDENTIFICADOR | P0 | P1 | P2 | P3]
-101  [ VALIDADE | IDADE | IDENTIFICADOR | P0 | P1 | P2 | P3]
-110  [ VALIDADE | IDADE | IDENTIFICADOR | P0 | P1 | P2 | P3]
-110  [ VALIDADE | IDADE | IDENTIFICADOR | P0 | P1 | P2 | P3]
-111  [ VALIDADE | IDADE | IDENTIFICADOR | P0 | P1 | P2 | P3]
-111  [ VALIDADE | IDADE | IDENTIFICADOR | P0 | P1 | P2 | P3]
+        Line(uint8_t index)
+        {
+          this->index = index;
+          available = false;
+        }
 
-  SOLICITAÇÃO DE ENDEREÇO -> IDENTIFICADOR | LINHA | PALAVRA | ALINHAMENTO
-  EXEMPLO -> 00000001|000|01|00
-  */
-} DataCache;
+        bool isAvailable()
+        {
+          return available;
+        }
 
-typedef struct InstructionCache {
-  /*
-  PALAVRAS -> 32 BITS
-  VALIDADE -> 1 BIT
-  IDENTIFICADOR -> 6 BITS
-  IDADE -> MÁX 255
+        uint8_t getAge()
+        {
+          return age;
+        }
 
-  LÓGICA DAS PALAVRAS -> PALAVRA % 4 -> RESULTADO SÓ PODE SER 0(P0), 1(P1), 2(P2), 3(P3)
+        uint8_t getIdentifier()
+        {
+          return identifier;
+        }
 
-000  [ VALIDADE | IDADE | IDENTIFICADOR | P0 | P1 | P2 | P3]
-000  [ VALIDADE | IDADE | IDENTIFICADOR | P0 | P1 | P2 | P3]
-001  [ VALIDADE | IDADE | IDENTIFICADOR | P0 | P1 | P2 | P3]
-001  [ VALIDADE | IDADE | IDENTIFICADOR | P0 | P1 | P2 | P3]
-010  [ VALIDADE | IDADE | IDENTIFICADOR | P0 | P1 | P2 | P3]
-010  [ VALIDADE | IDADE | IDENTIFICADOR | P0 | P1 | P2 | P3]
-011  [ VALIDADE | IDADE | IDENTIFICADOR | P0 | P1 | P2 | P3]
-011  [ VALIDADE | IDADE | IDENTIFICADOR | P0 | P1 | P2 | P3]
-100  [ VALIDADE | IDADE | IDENTIFICADOR | P0 | P1 | P2 | P3]
-100  [ VALIDADE | IDADE | IDENTIFICADOR | P0 | P1 | P2 | P3]
-101  [ VALIDADE | IDADE | IDENTIFICADOR | P0 | P1 | P2 | P3]
-101  [ VALIDADE | IDADE | IDENTIFICADOR | P0 | P1 | P2 | P3]
-110  [ VALIDADE | IDADE | IDENTIFICADOR | P0 | P1 | P2 | P3]
-110  [ VALIDADE | IDADE | IDENTIFICADOR | P0 | P1 | P2 | P3]
-111  [ VALIDADE | IDADE | IDENTIFICADOR | P0 | P1 | P2 | P3]
-111  [ VALIDADE | IDADE | IDENTIFICADOR | P0 | P1 | P2 | P3]
+        uint32_t getWord(uint8_t wordIndex)
+        {
+          return words[wordIndex];
+        }
 
-  SOLICITAÇÃO DE ENDEREÇO -> IDENTIFICADOR | LINHA | PALAVRA | ALINHAMENTO
-  EXEMPLO -> 00000001|000|01|00
-  */
-} InstructionCache;
+        array<uint32_t, 4> getAllWords()
+        {
+          return words;
+        }
+
+        void loadLine(array<uint32_t, 4> words, uint8_t identifier)
+        {
+          this->words = words;
+          this->identifier = identifier;
+          age = 0;
+          available = true;
+        }
+    };
+
+    // I for instruction cache and D for data cache
+    char cacheType;
+    array<array<Line, 2>, 8> lines;
+    uint8_t identifier, lineIndex, wordIndex, hitIndex;
+    uint misses, hits;
+
+  public:
+    Cache(char cacheType)
+    {
+      this->cacheType = cacheType;
+
+      for (uint i = 0; i < lines.size(); i++)
+      {
+        Line newLine1(i), newLine2(i);
+        lines[i][0] = newLine1;
+        lines[i][1] = newLine2;
+      }
+
+      identifier = 0;
+      lineIndex = 0;
+      wordIndex = 0;
+      hitIndex = 0;
+      misses = 0;
+      hits = 0;
+    }
+
+    void addressRequest(uint32_t memAddress)
+    {
+      // Requested Address -> [identifier | line | word | alignment]
+      identifier = (memAddress / 4) / 8;
+      lineIndex = (memAddress / 4) % 8;
+      wordIndex = memAddress % 4;
+
+      identifier = identifier & 0x3F;
+      lineIndex = lineIndex & 0x7;
+      wordIndex = wordIndex & 0x3;
+    }
+
+    bool wordIsAvailable()
+    {
+      uint index = 0;
+      for (Line line : lines[lineIndex])
+      {
+        if (line.isAvailable() &&
+            line.getIdentifier() == identifier) 
+        {
+          hits++;
+          hitIndex = index;
+          return true;
+        };
+
+        index++;
+      }
+
+      misses++;
+      return false;
+    }
+
+    uint32_t getData()
+    {
+      for (Line line : lines[lineIndex])
+        if (line.isAvailable() &&
+            line.getIdentifier() == identifier) return line.getWord(wordIndex);
+    }
+
+    char* getOutputString(char const* status, char const* operation)
+    {
+      char instruction[30] = {0};
+      char* resultString = (char*) (malloc(100 * sizeof(char)));
+      
+      if (strcmp(status, "miss") == 0)
+      {
+        sprintf(instruction, "%c_%s_%s [%u]", cacheType, operation, status, lineIndex);
+        sprintf(resultString, "\t%-25s\t", instruction);
+        for (uint i = 0; i < lines[lineIndex].size(); i++) {
+          Line line = lines[lineIndex][i];
+          char string[35] = {0};
+          sprintf(string, "[%u]{VAL=%u,AGE=%u,ID=0x%06X}%s", i, line.isAvailable() ? 1 : 0, line.getAge(), line.getIdentifier(), i == lines[lineIndex].size() - 1 ? "" : ",");
+          strcat(resultString, string);
+        }
+      }
+      else 
+      {
+        sprintf(instruction, "%c_%s_%s [%u]->[%u]", cacheType, operation, status, lineIndex, hitIndex);
+        array<uint32_t, 4> words = lines[lineIndex][hitIndex].getAllWords();
+        char* data = (char*)(malloc(12 * words.size() * sizeof(char)));
+
+        for (uint i = 0; i < words.size(); i++)
+        {
+          uint32_t word = words[i];
+          char string[12] = {0};
+          sprintf(string, "0x%08X%s", word, i == words.size() - 1 ? "" : ",");
+          strcat(data, string);
+        }
+
+        sprintf(resultString, "\t%-25s\tID=0x%06X,DATA={%s}", instruction, identifier, data);
+      }
+
+      return resultString;
+    }
+
+    void loadWords(uint32_t* MEM, uint32_t address)
+    {
+      uint initialWord = address - (address % 4);
+      array<uint32_t, 4> words;
+
+      for (uint i = 0; i < words.size(); i++)
+        words[i] = MEM[initialWord + i];
+
+      for (uint i = 0; i < lines[lineIndex].size(); i++)
+      {
+        if (!lines[lineIndex][i].isAvailable())
+        {
+          lines[lineIndex][i].loadLine(words, identifier);
+          break;
+        }
+      }
+    }
+};
 
 void getFileInstructions(FILE* input, uint32_t* MEM);
 
@@ -511,6 +631,8 @@ int main (int argc, char* argv[]) {
   FPURegister fpuOperandX(0x80808880), fpuOperandY(0x80808884), fpuResult(0x80808888);
   FPURegisterControl fpuControl(0x8080888C, &fpuOperandX, &fpuOperandY, &fpuResult);
   HardwareInterruption hardInt = {0};
+
+  Cache instructionCache('I');
 
   fprintf(output, "[START OF SIMULATION]\n");
   uint8_t running = 1;
@@ -575,6 +697,19 @@ int main (int argc, char* argv[]) {
         hadSoftwareInterruption = false;
         strcpy(interruptionType, "");
       }
+    }
+
+    instructionCache.addressRequest(R[29]);
+    if (!instructionCache.wordIsAvailable()) 
+    {
+      char* string = instructionCache.getOutputString("miss", "read");
+      fprintf(output, "0x%08X:%s\n", R[29] << 2, string);
+      instructionCache.loadWords(MEM32, R[29]);
+    }
+    else 
+    {
+      char *string = instructionCache.getOutputString("hit", "read");
+      fprintf(output, "0x%08X:%s\n", R[29] << 2, string);
     }
 
     R[28] = MEM32[R[29]];
