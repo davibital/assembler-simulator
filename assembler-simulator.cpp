@@ -7,6 +7,7 @@
 #include <string.h>
 #include <string>
 #include <array>
+#include <math.h>
 
 using namespace std;
 
@@ -568,6 +569,12 @@ class Cache
           break;
         }
       }
+    }
+
+    void printHitRate(FILE* outputFile)
+    {
+      float hitRate = (float)((float)hits / (float)(hits + misses)) * 100;
+      fprintf(outputFile, "%C_hit_rate: %.2f%%\n", cacheType, roundf(hitRate * 100) / 100);
     }
 };
 
@@ -1781,6 +1788,8 @@ int main (int argc, char* argv[]) {
     R[29] = (R[29] + 4) >> 2;
   }
 
+  fprintf(output, "[CACHE]\n");
+  instructionCache.printHitRate(output);
   terminal.print(output);
 
   fprintf(output, "[END OF SIMULATION]\n");
